@@ -1,5 +1,7 @@
 # SageMaker Studio Administrator IaC Templates
 
+![Studio Banner](./media/sagemaker-banner.png)
+
 ## Overview
 
 This repository is dedicated for Amazon SageMaker Studio Administration Infrastructure as Code templates to spin-up SageMaker Studio resources.
