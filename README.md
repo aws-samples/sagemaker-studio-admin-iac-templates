@@ -2,10 +2,14 @@
 
 ## Overview
 
-This repository is dedicated for Amazon SageMaker Studio Administration Infrastructure as Code templates to spin-up Studio resources.
+This repository is dedicated for Amazon SageMaker Studio Administration Infrastructure as Code templates to spin-up SageMaker Studio resources.
 
+
+
+## Table of IaC
 
 The table below provides a scenario and a sample CFN that can be launched into your account.
+
 
 
 | Template Description      | CloudFormation | TerraForm |
