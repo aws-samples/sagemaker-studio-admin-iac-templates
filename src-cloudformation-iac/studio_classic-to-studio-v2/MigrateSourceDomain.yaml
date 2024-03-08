@@ -1,0 +1,115 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Migrates SageMaker domain from Classic to V2
+
+Parameters:
+  SourceDomainId:
+    Type: String
+    Description: The ID of the existing SageMaker Studio Domain.
+  
+  SourceDomainRegion:
+    Type: String
+    Description: AWS Region for the SageMaker Studio Domain.
+  
+  LambdaAdminExecutionRoleArn:
+    Type: String
+    Description: ARN of the Lambda execution role to be used by Lambda to query source domain information.
+
+Resources:
+
+  MigrateSageMakerDomain:
+    Type: Custom::migrateSageMakerDomain
+    Properties:
+      ServiceToken: 
+        Fn::GetAtt:
+            - SageMakerMigrateLambda
+            - Arn
+
+  SageMakerMigrateLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-MigrateStudio"
+      Handler: index.lambda_handler
+      Role: !Ref LambdaAdminExecutionRoleArn
+      Runtime: python3.12
+      MemorySize: 128
+      Timeout: 180
+      Environment:
+        Variables:
+          SRC_DOMAIN_ID: !Ref SourceDomainId
+          SRC_REGION: !Ref SourceDomainRegion
+      Code:
+        ZipFile: |
+          # reference: https://stackoverflow.com/questions/53736963/aws-lambda-console-upgrade-boto3-version
+          import sys
+          from pip._internal import main
+
+          main(['install', '-I', '-q', 'boto3==1.34.54', '--target', '/tmp/', '--no-cache-dir', '--disable-pip-version-check'])
+          sys.path.insert(0,'/tmp/')
+
+          import boto3
+          from botocore.exceptions import ClientError
+
+          import os
+          import time
+          import json
+          import boto3
+          import cfnresponse
+
+          def lambda_handler(event, context):
+
+              sagemaker_client = boto3.client('sagemaker')
+
+              # Domain ID to describe
+              domain_id = os.environ['SRC_DOMAIN_ID']
+
+              print("event", event)
+              print("context", context)
+              print("domain_id", domain_id)
+
+              # update domain
+              domain_update = sagemaker_client.update_domain(
+                DomainId=domain_id,
+                DefaultUserSettings={
+                  'StudioWebPortal': 'ENABLED',
+                  'DefaultLandingUri': 'studio::'
+                }
+              )
+
+              time.sleep(5)
+
+              # Retrieve the domain details
+              domain_response = sagemaker_client.describe_domain(DomainId=domain_id)
+
+              try:
+
+                domainParameters = {
+                    'UpdatedDomainId': domain_id,
+                    'StudioWebPortal': domain_response['DefaultUserSettings']['StudioWebPortal'],
+                    'DefaultLandingUri': domain_response['DefaultUserSettings']['DefaultLandingUri']
+                }
+                
+                print("domainParameters", domainParameters)
+
+                assert domainParameters['StudioWebPortal'] == 'ENABLED', f"Update failed {domainParameters}"
+
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, domainParameters, None)
+
+              except Exception as e:
+
+                domainParameters = {'Error': str(e)}
+                cfnresponse.send(event, context, cfnresponse.FAILED, domainParameters, None)
+
+
+Outputs:
+
+  SourceDomainId:
+    Description: "Updated DomainId"
+    Value: !GetAtt MigrateSageMakerDomain.UpdatedDomainId
+  
+  SourceDomainWebPortalSetting:
+    Description: "Source Domain StudioWebPortal Setting"
+    Value: !GetAtt MigrateSageMakerDomain.StudioWebPortal
+
+  SourceDomainDefaultLandingUri:
+    Description: "Source Domain DefaultLandingUri Setting"
+    Value: !GetAtt MigrateSageMakerDomain.DefaultLandingUri

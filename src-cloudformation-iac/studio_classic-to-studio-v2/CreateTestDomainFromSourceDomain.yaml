@@ -1,0 +1,220 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Template creates a Target SageMaker Domain using a reference/source domain
+
+Parameters:
+  SourceDomainId:
+    Type: String
+    Description: The ID of the existing SageMaker Studio Domain.
+  
+  SourceDomainRegion:
+    Type: String
+    Description: AWS Region for the SageMaker Studio Domain.
+  
+  LambdaAdminExecutionRoleArn:
+    Type: String
+    Description: ARN of the Lambda execution role to be used by Lambda to query source domain information.
+  
+  TargetDomainName:
+    Type: String
+    Description: Name of target domain to be created by IaC
+  
+  TargetDomainUser:
+    Type: String
+    Default: "test-user"
+    Description: Name of test user under test domain to be created by IaC
+
+Resources:
+
+  SourceSageMakerDomain:
+    Type: Custom::sourceSageMakerDomain
+    Properties:
+      ServiceToken: 
+        Fn::GetAtt:
+            - SageMakerQueryLambda
+            - Arn
+
+  SageMakerQueryLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-QuerySageMaker"
+      Handler: index.lambda_handler
+      Role: !Ref LambdaAdminExecutionRoleArn
+      Runtime: python3.11
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          SRC_DOMAIN_ID: !Ref SourceDomainId
+          SRC_REGION: !Ref SourceDomainRegion
+      Code:
+        ZipFile: |
+          import os
+          import json
+          import boto3
+          import cfnresponse
+
+          def lambda_handler(event, context):
+              # Initialize the SageMaker and CloudFormation clients
+              sagemaker_client = boto3.client('sagemaker')
+
+              # Domain ID to describe
+              domain_id = os.environ['SRC_DOMAIN_ID']
+
+              print("event", event)
+              print("context", context)
+              print("domain_id", domain_id)
+
+              # Retrieve the domain details
+              domain_response = sagemaker_client.describe_domain(DomainId=domain_id)
+
+              try:
+
+                domainParameters = {
+                    'AppNetworkAccessType': domain_response['AppNetworkAccessType'],
+                    'AuthMode': domain_response['AuthMode'],
+                    'VpcId': domain_response['VpcId'],
+                    'SubnetIds': ",".join(domain_response['SubnetIds']),
+                    'ExecutionRole': domain_response['DefaultUserSettings']['ExecutionRole'],
+                    'SecurityGroups': ",".join(domain_response['DefaultUserSettings']['SecurityGroups'])
+                }
+                
+                print("domainParameters", domainParameters)
+
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, domainParameters, None)
+
+              except Exception as e:
+
+                domainParameters = {'Error': str(e)}
+                cfnresponse.send(event, context, cfnresponse.FAILED, domainParameters, None)
+
+  CreateTargetStudioDomain:
+    Type: AWS::SageMaker::Domain
+    DependsOn: SourceSageMakerDomain
+    Properties:
+      DomainName: !Ref TargetDomainName
+      AppNetworkAccessType: !GetAtt SourceSageMakerDomain.AppNetworkAccessType
+      AuthMode: !GetAtt SourceSageMakerDomain.AuthMode
+      VpcId: !GetAtt SourceSageMakerDomain.VpcId
+      SubnetIds: !Split [",", !GetAtt SourceSageMakerDomain.SubnetIds ]
+      DefaultUserSettings:
+        ExecutionRole: !GetAtt SourceSageMakerDomain.ExecutionRole
+        StudioWebPortal: "ENABLED" # Disabled for Classic 
+        DefaultLandingUri: "studio::" # app:JupyterServer: (for legacy)
+        SecurityGroups: !Split [",", !GetAtt SourceSageMakerDomain.SecurityGroups ]
+  
+  StudioUserProfile:
+    Type: AWS::SageMaker::UserProfile
+    Properties:
+      DomainId: !Ref CreateTargetStudioDomain
+      UserProfileName: !Ref TargetDomainUser
+      UserSettings: 
+        ExecutionRole: !GetAtt SourceSageMakerDomain.ExecutionRole
+  
+  UpdateRoleWithV2SageMakerPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: SageMakerV2SpaceAndAppAccessPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowStudioActions
+            Effect: Allow
+            Action:
+              - sagemaker:CreatePresignedDomainUrl
+              - sagemaker:DescribeDomain
+              - sagemaker:ListDomains
+              - sagemaker:DescribeUserProfile
+              - sagemaker:ListUserProfiles
+              - sagemaker:DescribeSpace
+              - sagemaker:ListSpaces
+              - sagemaker:DescribeApp
+              - sagemaker:ListApps
+            Resource: "*"
+          - Sid: AllowAppActionsForUserProfile
+            Effect: Allow
+            Action:
+              - sagemaker:CreateApp
+              - sagemaker:DeleteApp
+            Resource: "arn:aws:sagemaker:*:*:app/*/*/*/*"
+            Condition:
+              'Null': 
+                sagemaker:OwnerUserProfileArn: "true"
+          - Sid: AllowAppActionsForSharedSpaces
+            Effect: Allow
+            Action:
+              - sagemaker:CreateApp
+              - sagemaker:DeleteApp
+            Resource: "arn:aws:sagemaker:*:*:app/${sagemaker:DomainId}/*/*/*"
+            Condition:
+              StringEquals:
+                sagemaker:SpaceSharingType: ["Shared"]
+          - Sid: AllowMutatingActionsOnSharedSpacesWithoutOwner
+            Effect: Allow
+            Action:
+              - sagemaker:CreateSpace
+              - sagemaker:UpdateSpace
+              - sagemaker:DeleteSpace
+            Resource: "arn:aws:sagemaker:*:*:space/${sagemaker:DomainId}/*"
+            Condition:
+              'Null':
+                sagemaker:OwnerUserProfileArn: "true"
+          - Sid: RestrictMutatingActionsOnSpacesToOwnerUserProfile
+            Effect: Allow
+            Action:
+              - sagemaker:CreateSpace
+              - sagemaker:UpdateSpace
+              - sagemaker:DeleteSpace
+            Resource: "arn:aws:sagemaker:*:*:space/${sagemaker:DomainId}/*"
+            Condition:
+              ArnLike:
+                sagemaker:OwnerUserProfileArn: "arn:aws:sagemaker:*:*:user-profile/${sagemaker:DomainId}/${sagemaker:UserProfileName}"
+              StringEquals:
+                sagemaker:SpaceSharingType: ["Private", "Shared"]
+          - Sid: RestrictMutatingActionsOnPrivateSpaceAppsToOwnerUserProfile
+            Effect: Allow
+            Action:
+              - sagemaker:CreateApp
+              - sagemaker:DeleteApp
+            Resource: "arn:aws:sagemaker:*:*:app/${sagemaker:DomainId}/*/*/*"
+            Condition:
+              ArnLike:
+                sagemaker:OwnerUserProfileArn: "arn:aws:sagemaker:*:*:user-profile/${sagemaker:DomainId}/${sagemaker:UserProfileName}"
+              StringEquals:
+                sagemaker:SpaceSharingType: ["Private"]
+
+      Roles: 
+        - !Select [ 1, !Split [ "/", !GetAtt SourceSageMakerDomain.ExecutionRole ] ] 
+
+
+Outputs:
+  SourceDomainAuthMode:
+    Description: "Source AuthMode"
+    Value: !GetAtt SourceSageMakerDomain.AuthMode
+  
+  SourceDomainVPC:
+    Description: "Source VpcId"
+    Value: !GetAtt SourceSageMakerDomain.VpcId
+
+  SourceDomainSubnetIds:
+    Description: "Source SubnetIds"
+    Value: !GetAtt SourceSageMakerDomain.SubnetIds 
+
+  SourceDomainExecutionRole:
+    Description: "Source ExecutionRole"
+    Value: !GetAtt SourceSageMakerDomain.ExecutionRole
+  
+  SourceDomainSecurityGroups:
+    Description: "Source SecurityGroups"
+    Value: !GetAtt SourceSageMakerDomain.SecurityGroups 
+  
+  TargetDomainId:
+    Description: "Target DomainId"
+    Value: !Ref CreateTargetStudioDomain
+  
+  TargetDomainUrl:
+    Description: "Target Domain URL"
+    Value: !GetAtt CreateTargetStudioDomain.Url
+  
+  UpdatedSageMakerPolicy:
+    Description: "SageMaker Updated Policy"
+    Value: !Ref UpdateRoleWithV2SageMakerPolicy
