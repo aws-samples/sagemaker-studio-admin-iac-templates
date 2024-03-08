@@ -10,10 +10,6 @@ Parameters:
     Type: String
     Description: AWS Region for the SageMaker Studio Domain.
   
-  LambdaAdminExecutionRoleArn:
-    Type: String
-    Description: ARN of the Lambda execution role to be used by Lambda to query source domain information.
-  
   TargetDomainName:
     Type: String
     Description: Name of target domain to be created by IaC
@@ -33,12 +29,42 @@ Resources:
             - SageMakerQueryLambda
             - Arn
 
+  SageMakerQueryLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-LambdaExecRole"
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: !Sub '${AWS::StackName}-LambdaExecPolicy'
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sagemaker:DescribeDomain
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
   SageMakerQueryLambda:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub "${AWS::StackName}-QuerySageMaker"
       Handler: index.lambda_handler
-      Role: !Ref LambdaAdminExecutionRoleArn
+      Role: !GetAtt SageMakerQueryLambdaRole.Arn
       Runtime: python3.11
       MemorySize: 128
       Timeout: 30
