@@ -36,7 +36,7 @@ Migrates SageMaker Studio Domain from Classic to V2. This migration action happe
 | Step 1: Create a Test Domain from Source Domain     | [<img src="./media/cfnicon.jpg" width="50" height="50" />](./src-cloudformation-iac/studio-classic-to-studio-v2/CreateTestDomainFromSourceDomain.yaml)       | [<img src="./media/tficon.png" width="45" height="45" />](./src-terraform-iac/studio-classic-to-studio-v2/CreateTestDomainFromSourceDomain.tf)       |
 | Step 2: Migrate Source Domain from Classic to V2    | [<img src="./media/cfnicon.jpg" width="50" height="50" />](./src-cloudformation-iac/studio-classic-to-studio-v2/MigrateSourceDomain.yaml)       | [<img src="./media/tficon.png" width="45" height="45" />](./src-terraform-iac/studio-classic-to-studio-v2/MigrateSourceDomain.tf)       |
 
-> :warning: **If you are using mobile browser**: Please note, Migration Terraform templates were generated using [cf2tf](https://github.com/DontShaveTheYak/cf2tf) module. Please drop an issue if you encounter issues with TF templates.
+> :warning: **If you are running Terraform Migration**: Please note, Migration Terraform templates were generated using [cf2tf](https://github.com/DontShaveTheYak/cf2tf) module. Please drop an issue if you encounter issues with TF templates.
 
 ## Security
 
