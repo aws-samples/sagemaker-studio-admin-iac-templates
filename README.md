@@ -33,8 +33,8 @@ Migrates SageMaker Studio Domain from Classic to V2. This migration action happe
 
 | Template Description      | AWS CloudFormation | HashiCorp Terraform |
 | :------------------------ | :-----------:  | :--------:|
-| Step 1: Create a Test Domain from Source Domain     | [<img src="./media/cfnicon.jpg" width="50" height="50" />](./src-cloudformation-iac/studio_classic-to-studio-v2/CreateTestDomainFromSourceDomain.yaml)       | WIP       |
-| Step 2: Migrate Source Domain from Classic to V2    | [<img src="./media/cfnicon.jpg" width="50" height="50" />](./src-cloudformation-iac/studio_classic-to-studio-v2/MigrateSourceDomain.yaml)       | WIP       |
+| Step 1: Create a Test Domain from Source Domain     | [<img src="./media/cfnicon.jpg" width="50" height="50" />](./src-cloudformation-iac/studio-classic-to-studio-v2/CreateTestDomainFromSourceDomain.yaml)       | WIP       |
+| Step 2: Migrate Source Domain from Classic to V2    | [<img src="./media/cfnicon.jpg" width="50" height="50" />](./src-cloudformation-iac/studio-classic-to-studio-v2/MigrateSourceDomain.yaml)       | WIP       |
 
 
 
