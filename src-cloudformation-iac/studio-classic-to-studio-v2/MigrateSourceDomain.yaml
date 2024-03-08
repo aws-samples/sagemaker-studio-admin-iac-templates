@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Migrates SageMaker domain from Classic to V2
+Description: Migrates SageMaker domain from Classic to V2 based on Domain Id
 
 Parameters:
   SourceDomainId:

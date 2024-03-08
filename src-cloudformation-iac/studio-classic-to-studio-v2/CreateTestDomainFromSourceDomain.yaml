@@ -98,8 +98,8 @@ Resources:
       SubnetIds: !Split [",", !GetAtt SourceSageMakerDomain.SubnetIds ]
       DefaultUserSettings:
         ExecutionRole: !GetAtt SourceSageMakerDomain.ExecutionRole
-        StudioWebPortal: "ENABLED" # Disabled for Classic 
-        DefaultLandingUri: "studio::" # app:JupyterServer: (for legacy)
+        StudioWebPortal: "ENABLED" # DISABLED for Classic 
+        DefaultLandingUri: "studio::" # app:JupyterServer: for Classic
         SecurityGroups: !Split [",", !GetAtt SourceSageMakerDomain.SecurityGroups ]
   
   StudioUserProfile:
