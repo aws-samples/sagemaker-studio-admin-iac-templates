@@ -1,5 +1,4 @@
-// Cloning Terraform src code to /var/folders/xt/bwrhjh2s1ld30n8xcgngtmhm0000gr/T/terraform_src...
- code has been checked out.
+// Existing Terraform src code found at /var/folders/xt/bwrhjh2s1ld30n8xcgngtmhm0000gr/T/terraform_src.
 
 locals {
   stack_name = "CreateTestDomainFromSourceDomain"
@@ -12,11 +11,6 @@ variable source_domain_id {
 
 variable source_domain_region {
   description = "AWS Region for the SageMaker Studio Domain."
-  type = string
-}
-
-variable lambda_admin_execution_role_arn {
-  description = "ARN of the Lambda execution role to be used by Lambda to query source domain information."
   type = string
 }
 
@@ -35,10 +29,57 @@ resource "aws_macie2_custom_data_identifier" "source_sage_maker_domain" {
   // CF Property(ServiceToken) = aws_lambda_function.sage_maker_query_lambda.arn
 }
 
+resource "aws_iam_role" "sage_maker_query_lambda_role" {
+  name = "${local.stack_name}-LambdaExecRole"
+  assume_role_policy = {
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = [
+            "lambda.amazonaws.com"
+          ]
+        }
+        Action = [
+          "sts:AssumeRole"
+        ]
+      }
+    ]
+  }
+  path = "/"
+  force_detach_policies = [
+    {
+      PolicyName = "${local.stack_name}-LambdaExecPolicy"
+      PolicyDocument = {
+        Version = "2012-10-17"
+        Statement = [
+          {
+            Effect = "Allow"
+            Action = [
+              "sagemaker:DescribeDomain"
+            ]
+            Resource = "*"
+          },
+          {
+            Effect = "Allow"
+            Action = [
+              "logs:CreateLogGroup",
+              "logs:CreateLogStream",
+              "logs:PutLogEvents"
+            ]
+            Resource = "*"
+          }
+        ]
+      }
+    }
+  ]
+}
+
 resource "aws_lambda_function" "sage_maker_query_lambda" {
   function_name = "${local.stack_name}-QuerySageMaker"
   handler = "index.lambda_handler"
-  role = var.lambda_admin_execution_role_arn
+  role = aws_iam_role.sage_maker_query_lambda_role.arn
   runtime = "python3.11"
   memory_size = 128
   timeout = 30
