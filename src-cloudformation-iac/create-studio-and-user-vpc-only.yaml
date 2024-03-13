@@ -1,0 +1,84 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create SageMaker Domain and a test user with full SageMaker Access in PublicInternetOnly mode.
+
+Parameters:
+
+  DomainName:
+    Type: String
+    Default: "MyExampleDomain"
+    Description: SageMaker Studio Domain Name
+  
+  StudioUserName:
+    Type: String
+    Default: "test-user1"
+    Description: SageMaker Studio User Name
+  
+  VPCId:
+    Type: String
+    Description: VPC Id for SageMaker Studio
+    Default: "vpc-xxxxxx"
+  
+  SubnetIds:
+    Type: String
+    Description: Subnet Ids for SageMaker Studio
+    Default: "subnet-xxxxx or subnet-1xxxx,subnet-2xxxx,subnet-3xxxx"
+  
+  SecurityGroupsIds:
+    Type: String
+    Description: Security Groups Ids for SageMaker Studio
+    Default: "sg-xxxxx or sg-1xxxx,sg-2xxxx,sg-3xxxx"
+
+
+Resources:
+  
+  SageMakerStudioFullAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-${DomainName}-Role"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - sagemaker.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: "/"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
+  
+  SageMakerStudioVPCOnlyDomain:
+    Type: AWS::SageMaker::Domain
+    Properties:
+      AppNetworkAccessType: VpcOnly
+      AuthMode: IAM
+      DomainName: !Ref DomainName
+      SubnetIds: !Split [",", !Ref SubnetIds ]
+      VpcId: !Ref VPCId
+      DefaultUserSettings:
+        SecurityGroups: !Split [",", !Ref SecurityGroupsIds ]
+        ExecutionRole: !GetAtt SageMakerStudioFullAccessRole.Arn
+  
+  UserProfile:
+    Type: AWS::SageMaker::UserProfile
+    Properties:
+      DomainId: !Ref SageMakerStudioVPCOnlyDomain
+      UserProfileName: !Ref StudioUserName
+      UserSettings:
+        ExecutionRole: !GetAtt SageMakerStudioFullAccessRole.Arn
+
+Outputs:
+
+  NewSageMakerDomain:
+    Description: "New Domain Id"
+    Value: !Ref SageMakerStudioVPCOnlyDomain
+  
+  SageMakerDomainUrl:
+    Value: !Join
+      - ''
+      - - 'https://console.aws.amazon.com/sagemaker/home?region='
+        - !Ref 'AWS::Region'
+        - '#/studio/'
+        - !Ref SageMakerStudioVPCOnlyDomain
+    Description: URL to access the SageMaker Domain
+
