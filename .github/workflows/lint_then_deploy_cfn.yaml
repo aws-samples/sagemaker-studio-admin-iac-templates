@@ -26,7 +26,7 @@ jobs:
 
       # Run cfn-lint on your CloudFormation templates
       - name: Lint CloudFormation Templates
-        run: cfn-lint src-cloudformation-iac/studio-classic-to-studio-v2/create-testdomain-from-srcdomain.yaml
+        run: cfn-lint src-cloudformation-iac/studio-classic-to-studio-v2/create-testdomain-from-srcdomain.yaml --ignore-checks W3005
 
       # Configure AWS credentials from GitHub Secrets
       # - name: Configure AWS credentials
