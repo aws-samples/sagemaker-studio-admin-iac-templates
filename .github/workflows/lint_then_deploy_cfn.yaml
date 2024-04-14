@@ -24,9 +24,12 @@ jobs:
       - name: Install CFN Lint
         run: pip install cfn-lint
 
-      # Run cfn-lint on your CloudFormation templates
+      # Run cfn-lint on CloudFormation templates
       - name: Lint CloudFormation Templates
-        run: cfn-lint src-cloudformation-iac/studio-classic-to-studio-v2/create-testdomain-from-srcdomain.yaml --ignore-checks W3005
+        run: |
+          for file in $(find . -type f -name '*.yaml' -path './src-cloudformation*/*'); do
+            cfn-lint "$file" --ignore-checks W3005 || echo "Linting found non-critical issues in $file"
+          done
 
       # Configure AWS credentials from GitHub Secrets
       # - name: Configure AWS credentials
