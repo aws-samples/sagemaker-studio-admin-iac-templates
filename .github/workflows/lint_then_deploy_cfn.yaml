@@ -27,9 +27,18 @@ jobs:
       # Run cfn-lint on CloudFormation templates
       - name: Lint CloudFormation Templates
         run: |
+          results=""
+          exit_status=0
           for file in $(find . -type f -name '*.yaml' -path './src-cloudformation*/*'); do
-            cfn-lint "$file" --ignore-checks W3005 || echo "Linting found non-critical issues in $file"
+            output=$(cfn-lint "$file" 2>&1)
+            exit_code=$?
+            if [ $exit_code != 0 ]; then
+              echo "$output" | grep 'W3005' && echo "INFO: W3005 warnings found in $file" || exit_status=1
+              # Remove W3005 lines from output and show the rest as errors if any
+              echo "$output" | grep -v 'W3005' >&2
+            fi
           done
+          exit $exit_status
 
       # Configure AWS credentials from GitHub Secrets
       # - name: Configure AWS credentials
