@@ -1,13 +1,16 @@
-name: Lint and Validate CloudFormation templates
+name: Pre-commit and Validate CloudFormation templates
 
 on:
   push:
     branches:
-      - mccartni/gh-actions
+      - 'mccartni/*'
+      - main
+  pull_request:
+    branches:
       - main
 
 jobs:
-  lint-and-deploy:
+  lint-and-validate:
     runs-on: ubuntu-latest
 
     steps:
@@ -21,24 +24,19 @@ jobs:
         with:
           python-version: '3.9'
 
-      # Install cfn-lint
-      - name: Install CFN Lint
-        run: pip install cfn-lint
+      # Install cfn-lint and pre-commit
+      - name: Install CFN Lint and Pre-commit
+        run: |
+          pip install cfn-lint pre-commit
+          pre-commit install
+
+      # Run pre-commit hooks
+      - name: Run pre-commit hooks
+        run: pre-commit run --all-files
 
       # Run cfn-lint on CloudFormation templates
       - name: Lint CloudFormation Templates
         run: |
           for file in $(find . -type f -name '*.yaml' -path './src-cloudformation*/*'); do
             cfn-lint "$file" --ignore-checks W || echo "Linting found non-critical issues in $file"
-          done
-
-      # Install cfn-policy-validator
-      - name: Install CFN Policy Validator
-        run: pip install cfn-policy-validator
-
-      # Run cfn-policy-validator on CloudFormation templates
-      - name: Validate IAM Policies in CloudFormation Templates
-        run: |
-          for file in $(find . -type f -name '*.yaml' -path './src-cloudformation*/*'); do
-            cfn-policy-validator validate --template-path "$file" --region us-east-1 || echo "Policy validation found issues in $file"
           done
