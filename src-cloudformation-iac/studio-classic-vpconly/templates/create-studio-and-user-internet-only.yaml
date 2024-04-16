@@ -9,15 +9,15 @@ Parameters:
     Description: Name of the networking stack you created earlier
     Type: String
 
-Mappings: 
-  SageMakerImageRegionToAccountMap: 
-    us-east-1: 
+Mappings:
+  SageMakerImageRegionToAccountMap:
+    us-east-1:
       accountid: '081325390199'
     us-east-2:
       accountid: '429704687514'
-    us-west-1: 
+    us-west-1:
       accountid: '742091327244'
-    us-west-2: 
+    us-west-2:
       accountid: '236514542706'
     af-south-1:
       accountid: '559312083959'
@@ -31,11 +31,11 @@ Mappings:
       accountid: '492261229750'
     ap-southeast-2:
       accountid: '452832661640'
-    ap-northeast-1: 
+    ap-northeast-1:
       accountid: '102112518831'
     ca-central-1:
       accountid: '310906938811'
-    eu-central-1: 
+    eu-central-1:
       accountid: '936697816551'
     eu-west-1:
       accountid: '470317259841'
@@ -59,7 +59,7 @@ Resources:
       AppNetworkAccessType: "VpcOnly"
       DefaultUserSettings:
         ExecutionRole: !GetAtt SageMakerExecutionRole.Arn
-        SecurityGroups: 
+        SecurityGroups:
           - Fn::ImportValue:
               !Sub '${CoreNetworkingStackName}-SecurityGroup'
       DomainName: !Sub '${AWS::StackName}'
@@ -79,13 +79,13 @@ Resources:
       UserProfileName: !Ref UserProfileName
       UserSettings:
         ExecutionRole: !GetAtt SageMakerExecutionRole.Arn
-        JupyterServerAppSettings: 
+        JupyterServerAppSettings:
           DefaultResourceSpec:
             InstanceType: system
             SageMakerImageArn:
               Fn::Sub:
                 - 'arn:aws:sagemaker:${AWS::Region}:${AccountId}:image/jupyter-server-3'
-                - AccountId: !FindInMap [SageMakerImageRegionToAccountMap, !Ref 'AWS::Region', accountid]            
+                - AccountId: !FindInMap [SageMakerImageRegionToAccountMap, !Ref 'AWS::Region', accountid]
 
   JupyterServerApp:
     Type: AWS::SageMaker::App
@@ -95,8 +95,8 @@ Resources:
       AppType: JupyterServer
       DomainId: !Ref StudioDomain
       UserProfileName: !Ref UserProfileName
-      ResourceSpec: 
-        SageMakerImageArn: 
+      ResourceSpec:
+        SageMakerImageArn:
           Fn::Sub:
             - 'arn:aws:sagemaker:${AWS::Region}:${AccountId}:image/jupyter-server-3'
             - AccountId: !FindInMap [SageMakerImageRegionToAccountMap, !Ref 'AWS::Region', accountid]
@@ -104,14 +104,14 @@ Resources:
   DataScienceApp:
     Type: AWS::SageMaker::App
     DependsOn: UserProfile
-    Properties: 
+    Properties:
       AppName: datascience-ml-t3-medium
       AppType: KernelGateway
       DomainId: !Ref StudioDomain
       UserProfileName: !Ref UserProfileName
-      ResourceSpec: 
+      ResourceSpec:
         InstanceType: ml.t3.medium
-        SageMakerImageArn: 
+        SageMakerImageArn:
           Fn::Sub:
             - 'arn:aws:sagemaker:${AWS::Region}:${AccountId}:image/sagemaker-data-science-38'
             - AccountId: !FindInMap [SageMakerImageRegionToAccountMap, !Ref 'AWS::Region', accountid]

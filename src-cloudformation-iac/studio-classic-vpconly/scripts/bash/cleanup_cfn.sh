@@ -6,7 +6,7 @@ TOP_LEVEL_DIR=$1
 # The second argument is the specific folder where the CloudFormation templates and scripts are located
 FOLDER=$2
 
-# The third argument is the Studio ARN that we've 
+# The third argument is the Studio ARN that we've
 STUDIO_ARN=$3
 
 # Source the AWS utilities script for AWS CLI checks and credential configuration

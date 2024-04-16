@@ -2,8 +2,8 @@ To make sure you do not incur additional charges when you no longer need the to 
 
 
 ### 1. Make note of the Amazon Resource Name (ARN) for the SageMaker Studio domain
-You will need the full ARN of the SageMaker Studio domain in step 3.   
-- Go to the CloudFormation console, select the second stack you created (named StudioAndUserInternetOnly if you used the suggested name in the deploy CFN script). 
+You will need the full ARN of the SageMaker Studio domain in step 3.
+- Go to the CloudFormation console, select the second stack you created (named StudioAndUserInternetOnly if you used the suggested name in the deploy CFN script).
 - Go to the Output tab, copy the value of the output named `StudioDomainArn` and keep it somewhere safe.
 
 NOTE: You can run the following make command to perform steps 2-4:

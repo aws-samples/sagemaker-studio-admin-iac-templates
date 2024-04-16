@@ -23,7 +23,7 @@ Resources:
         - Fn::GetAZs: !Ref 'AWS::Region'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-private-subnet1'    
+          Value: !Sub '${AWS::StackName}-private-subnet1'
 
   SageMakerPrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -36,7 +36,7 @@ Resources:
         - Fn::GetAZs: !Ref 'AWS::Region'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-private-subnet2'   
+          Value: !Sub '${AWS::StackName}-private-subnet2'
 
 
   SageMakerPrivateRouteTable:
@@ -232,7 +232,7 @@ Resources:
       PrivateDnsEnabled: true
       SubnetIds:
         - !Ref SageMakerPrivateSubnet1
-        - !Ref SageMakerPrivateSubnet2        
+        - !Ref SageMakerPrivateSubnet2
       SecurityGroupIds:
         - !Ref VPCEndpointSecurityGroup
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.logs'
@@ -252,7 +252,7 @@ Resources:
       PrivateDnsEnabled: true
       SubnetIds:
         - !Ref SageMakerPrivateSubnet1
-        - !Ref SageMakerPrivateSubnet2        
+        - !Ref SageMakerPrivateSubnet2
       SecurityGroupIds:
         - !Ref VPCEndpointSecurityGroup
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.dkr'
@@ -272,7 +272,7 @@ Resources:
       PrivateDnsEnabled: true
       SubnetIds:
         - !Ref SageMakerPrivateSubnet1
-        - !Ref SageMakerPrivateSubnet2        
+        - !Ref SageMakerPrivateSubnet2
       SecurityGroupIds:
         - !Ref VPCEndpointSecurityGroup
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.kms'
@@ -292,7 +292,7 @@ Resources:
       PrivateDnsEnabled: true
       SubnetIds:
         - !Ref SageMakerPrivateSubnet1
-        - !Ref SageMakerPrivateSubnet2        
+        - !Ref SageMakerPrivateSubnet2
       SecurityGroupIds:
         - !Ref VPCEndpointSecurityGroup
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.api'
@@ -312,7 +312,7 @@ Resources:
       PrivateDnsEnabled: true
       SubnetIds:
         - !Ref SageMakerPrivateSubnet1
-        - !Ref SageMakerPrivateSubnet2        
+        - !Ref SageMakerPrivateSubnet2
       SecurityGroupIds:
         - !Ref VPCEndpointSecurityGroup
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ec2'
@@ -331,8 +331,8 @@ Outputs:
   SageMakerSubnet2:
     Value: !Ref SageMakerPrivateSubnet2
     Export:
-      Name: !Sub '${AWS::StackName}-Subnet2'      
+      Name: !Sub '${AWS::StackName}-Subnet2'
   SageMakerSecurityGroup:
     Value: !Ref SageMakerSecurityGroup
     Export:
-      Name: !Sub '${AWS::StackName}-SecurityGroup'      
+      Name: !Sub '${AWS::StackName}-SecurityGroup'

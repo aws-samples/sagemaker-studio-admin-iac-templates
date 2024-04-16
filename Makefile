@@ -4,7 +4,7 @@ install:
 	@echo "Installing local requirements...\n"
 	pip install --upgrade pip
 	pip install -r requirements.txt
-	
+
 .PHONY: pre-commit
 pre-commit:
 	@echo "Running pre-commit checks...\n"

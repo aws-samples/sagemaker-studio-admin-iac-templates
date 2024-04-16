@@ -14,7 +14,7 @@ To deploy this solution, you'll need to execute a series of commands using the A
 
 1. Clone the repository to your local machine:
    ```bash
-   git clone https://github.com/aws-samples/sagemaker-studio-admin-iac-templates.git 
+   git clone https://github.com/aws-samples/sagemaker-studio-admin-iac-templates.git
    cd sagemaker-studio-admin-iac-templates
     ```
 2. Install the Make command (if on Mac)

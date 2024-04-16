@@ -54,4 +54,3 @@ delete_stack() {
         echo -e "Stack $stack_name does not exist in region $region.\n"
     fi
 }
-
