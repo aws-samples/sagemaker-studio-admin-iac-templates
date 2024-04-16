@@ -1,40 +1,48 @@
-name: Pre-commit and Validate CloudFormation templates
+name: Lint and Validate CloudFormation Templates
 
 on:
-  push:
-    branches:
-      - 'mccartni/*'
-      - main
   pull_request:
     branches:
       - main
+  push:
+    branches:
+      - main
+      - mccartni/*
 
 jobs:
-  lint-and-validate:
+  precommit:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout your repository
       - name: Checkout code
         uses: actions/checkout@v2
 
-      # Set up Python for cfn-lint
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
           python-version: '3.9'
 
-      # Install cfn-lint and pre-commit
-      - name: Install CFN Lint and Pre-commit
-        run: |
-          pip install cfn-lint pre-commit
-          pre-commit install
+      - name: Install pre-commit
+        run: pip install pre-commit
 
-      # Run pre-commit hooks
-      - name: Run pre-commit hooks
+      - name: Run pre-commit
         run: pre-commit run --all-files
 
-      # Run cfn-lint on CloudFormation templates
+  lint-and-validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+
+      - name: Install CFN Lint
+        run: pip install cfn-lint
+
       - name: Lint CloudFormation Templates
         run: |
           for file in $(find . -type f -name '*.yaml' -path './src-cloudformation*/*'); do
