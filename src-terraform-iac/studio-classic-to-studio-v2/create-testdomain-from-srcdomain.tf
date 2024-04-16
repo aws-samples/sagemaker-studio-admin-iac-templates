@@ -119,7 +119,7 @@ def lambda_handler(event, context):
           'ExecutionRole': domain_response['DefaultUserSettings']['ExecutionRole'],
           'SecurityGroups': ",".join(domain_response['DefaultUserSettings']['SecurityGroups'])
       }
-      
+
       print("domainParameters", domainParameters)
 
       cfnresponse.send(event, context, cfnresponse.SUCCESS, domainParameters, None)

@@ -7,22 +7,22 @@ Parameters:
     Type: String
     Default: "MyExampleDomain"
     Description: SageMaker Studio Domain Name
-  
+
   StudioUserName:
     Type: String
     Default: "test-user1"
     Description: SageMaker Studio User Name
-  
+
   VPCId:
     Type: String
     Description: VPC Id for SageMaker Studio
     Default: "vpc-xxxxxx"
-  
+
   SubnetIds:
     Type: String
     Description: Subnet Ids for SageMaker Studio
     Default: "subnet-xxxxx or subnet-1xxxx,subnet-2xxxx,subnet-3xxxx"
-  
+
   SecurityGroupsIds:
     Type: String
     Description: Security Groups Ids for SageMaker Studio
@@ -30,7 +30,7 @@ Parameters:
 
 
 Resources:
-  
+
   SageMakerStudioFullAccessRole:
     Type: AWS::IAM::Role
     Properties:
@@ -46,7 +46,7 @@ Resources:
       Path: "/"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
-  
+
   SageMakerStudioVPCOnlyDomain:
     Type: AWS::SageMaker::Domain
     Properties:
@@ -58,7 +58,7 @@ Resources:
       DefaultUserSettings:
         SecurityGroups: !Split [",", !Ref SecurityGroupsIds ]
         ExecutionRole: !GetAtt SageMakerStudioFullAccessRole.Arn
-  
+
   UserProfile:
     Type: AWS::SageMaker::UserProfile
     Properties:
@@ -72,7 +72,7 @@ Outputs:
   NewSageMakerDomain:
     Description: "New Domain Id"
     Value: !Ref SageMakerStudioVPCOnlyDomain
-  
+
   SageMakerDomainUrl:
     Value: !Join
       - ''
@@ -81,4 +81,3 @@ Outputs:
         - '#/studio/'
         - !Ref SageMakerStudioVPCOnlyDomain
     Description: URL to access the SageMaker Domain
-

@@ -85,7 +85,7 @@ def lambda_handler(event, context):
           'StudioWebPortal': domain_response['DefaultUserSettings']['StudioWebPortal'],
           'DefaultLandingUri': domain_response['DefaultUserSettings']['DefaultLandingUri']
       }
-      
+
       print("domainParameters", domainParameters)
 
       assert domainParameters['StudioWebPortal'] == 'ENABLED', f"Update failed {domainParameters}"

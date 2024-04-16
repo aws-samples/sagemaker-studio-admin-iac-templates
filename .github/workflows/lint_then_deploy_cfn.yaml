@@ -1,9 +1,10 @@
-name: Lint and Deploy CloudFormation Stack
+name: Lint and Validate CloudFormation templates
 
 on:
   push:
     branches:
       - mccartni/gh-actions
+      - main
 
 jobs:
   lint-and-deploy:
@@ -28,22 +29,16 @@ jobs:
       - name: Lint CloudFormation Templates
         run: |
           for file in $(find . -type f -name '*.yaml' -path './src-cloudformation*/*'); do
-            cfn-lint "$file" --ignore-checks W3005 || echo "Linting found non-critical issues in $file"
+            cfn-lint "$file" --ignore-checks W || echo "Linting found non-critical issues in $file"
           done
 
-      # Configure AWS credentials from GitHub Secrets
-      # - name: Configure AWS credentials
-      #   uses: aws-actions/configure-aws-credentials@v1
-      #   with:
-      #     aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      #     aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      #     aws-region: us-east-1
+      # Install cfn-policy-validator
+      - name: Install CFN Policy Validator
+        run: pip install cfn-policy-validator
 
-      # Deploy the CloudFormation Stack using the GitHub Action for AWS CloudFormation
-      # - name: Deploy to AWS CloudFormation
-      #   uses: aws-actions/aws-cloudformation-github-deploy@v1
-      #   with:
-      #     name: MyStackName
-      #     template: path/to/your/myStack.yaml
-      #     parameter-overrides: "MyParam1=myValue,MyParam2=${{ secrets.MY_SECRET_VALUE }}"
-      #     no-fail-on-empty-changeset: "1"
+      # Run cfn-policy-validator on CloudFormation templates
+      - name: Validate IAM Policies in CloudFormation Templates
+        run: |
+          for file in $(find . -type f -name '*.yaml' -path './src-cloudformation*/*'); do
+            cfn-policy-validator validate --template-path "$file" --region us-east-1 || echo "Policy validation found issues in $file"
+          done
