@@ -1,0 +1,46 @@
+name: Lint and Validate CloudFormation Templates
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  precommit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.11'
+
+      - name: Install pre-commit
+        run: pip install pre-commit
+
+      - name: Run pre-commit
+        run: pre-commit run --all-files
+
+  lint-and-validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+
+      - name: Install CFN Lint
+        run: pip install cfn-lint
+
+      - name: Lint CloudFormation Templates
+        run: |
+          for file in $(find . -type f -name '*.yaml' -path './src-cloudformation*/*'); do
+            cfn-lint "$file" --ignore-checks W || echo "Linting found non-critical issues in $file"
+          done

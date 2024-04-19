@@ -5,15 +5,15 @@ Parameters:
   SourceDomainId:
     Type: String
     Description: The ID of the existing SageMaker Studio Domain.
-  
+
   SourceDomainRegion:
     Type: String
     Description: AWS Region for the SageMaker Studio Domain.
-  
+
   TargetDomainName:
     Type: String
     Description: Name of target domain to be created by IaC
-  
+
   TargetDomainUser:
     Type: String
     Default: "test-user"
@@ -24,7 +24,7 @@ Resources:
   SourceSageMakerDomain:
     Type: Custom::sourceSageMakerDomain
     Properties:
-      ServiceToken: 
+      ServiceToken:
         Fn::GetAtt:
             - SageMakerQueryLambda
             - Arn
@@ -103,7 +103,7 @@ Resources:
                     'ExecutionRole': domain_response['DefaultUserSettings']['ExecutionRole'],
                     'SecurityGroups': ",".join(domain_response['DefaultUserSettings']['SecurityGroups'])
                 }
-                
+
                 print("domainParameters", domainParameters)
 
                 cfnresponse.send(event, context, cfnresponse.SUCCESS, domainParameters, None)
@@ -124,18 +124,18 @@ Resources:
       SubnetIds: !Split [",", !GetAtt SourceSageMakerDomain.SubnetIds ]
       DefaultUserSettings:
         ExecutionRole: !GetAtt SourceSageMakerDomain.ExecutionRole
-        StudioWebPortal: "ENABLED" # DISABLED for Classic 
+        StudioWebPortal: "ENABLED" # DISABLED for Classic
         DefaultLandingUri: "studio::" # app:JupyterServer: for Classic
         SecurityGroups: !Split [",", !GetAtt SourceSageMakerDomain.SecurityGroups ]
-  
+
   StudioUserProfile:
     Type: AWS::SageMaker::UserProfile
     Properties:
       DomainId: !Ref CreateTargetStudioDomain
       UserProfileName: !Ref TargetDomainUser
-      UserSettings: 
+      UserSettings:
         ExecutionRole: !GetAtt SourceSageMakerDomain.ExecutionRole
-  
+
   UpdateRoleWithV2SageMakerPolicy:
     Type: AWS::IAM::Policy
     Properties:
@@ -163,7 +163,7 @@ Resources:
               - sagemaker:DeleteApp
             Resource: "arn:aws:sagemaker:*:*:app/*/*/*/*"
             Condition:
-              'Null': 
+              'Null':
                 sagemaker:OwnerUserProfileArn: "true"
           - Sid: AllowAppActionsForSharedSpaces
             Effect: Allow
@@ -208,39 +208,39 @@ Resources:
               StringEquals:
                 sagemaker:SpaceSharingType: ["Private"]
 
-      Roles: 
-        - !Select [ 1, !Split [ "/", !GetAtt SourceSageMakerDomain.ExecutionRole ] ] 
+      Roles:
+        - !Select [ 1, !Split [ "/", !GetAtt SourceSageMakerDomain.ExecutionRole ] ]
 
 
 Outputs:
   SourceDomainAuthMode:
     Description: "Source AuthMode"
     Value: !GetAtt SourceSageMakerDomain.AuthMode
-  
+
   SourceDomainVPC:
     Description: "Source VpcId"
     Value: !GetAtt SourceSageMakerDomain.VpcId
 
   SourceDomainSubnetIds:
     Description: "Source SubnetIds"
-    Value: !GetAtt SourceSageMakerDomain.SubnetIds 
+    Value: !GetAtt SourceSageMakerDomain.SubnetIds
 
   SourceDomainExecutionRole:
     Description: "Source ExecutionRole"
     Value: !GetAtt SourceSageMakerDomain.ExecutionRole
-  
+
   SourceDomainSecurityGroups:
     Description: "Source SecurityGroups"
-    Value: !GetAtt SourceSageMakerDomain.SecurityGroups 
-  
+    Value: !GetAtt SourceSageMakerDomain.SecurityGroups
+
   TargetDomainId:
     Description: "Target DomainId"
     Value: !Ref CreateTargetStudioDomain
-  
+
   TargetDomainUrl:
     Description: "Target Domain URL"
     Value: !GetAtt CreateTargetStudioDomain.Url
-  
+
   UpdatedSageMakerPolicy:
     Description: "SageMaker Updated Policy"
     Value: !Ref UpdateRoleWithV2SageMakerPolicy

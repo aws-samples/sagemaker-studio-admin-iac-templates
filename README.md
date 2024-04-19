@@ -6,8 +6,28 @@
 
 This repository is dedicated for Amazon SageMaker Studio Administration Infrastructure as Code templates to spin-up SageMaker Studio resources.
 
+## Prerequisites
+
+Before getting started, ensure you have the following prerequisites installed:
+
+- [Homebrew](https://brew.sh/): If you're on macOS, you can install `make` using Homebrew by running:
+  ```bash
+  brew install make
+  ```
+- [Python](https://www.python.org/): Make sure you have Python installed. You can download it from the official Python website.
 
 
+## Installation
+
+ 1. Clone the repository
+    ```bash
+    git clone https://github.com/aws-samples/sagemaker-studio-admin-iac-templates.git
+2. Navigate to the repo directory
+    ```bash
+    cd sagemaker-studio-admin-iac-templates
+3. Install the required dependencies
+    ```bash
+    make install
 ## Table of User Journeys as Infrastructure-as-Code
 
 The table below provides a scenario and a sample cloudformation or terraform templates that can be launched into your account.
@@ -33,7 +53,7 @@ This section is reserved for IaCs for migration of your SageMaker Studio from Cl
 Migrates SageMaker Studio Domain from Classic to V2. This migration action happens in 2 distinct steps,
 
 1. **Step 1: Create a Test Domain from Source Domain**: Creates a test SageMaker Studio domain identical to a source domain with Studio V2 configuration. This domain can be used to test networking, creating apps and spaces, read/write to s3, test access to tools and more.
-   
+
 2. **Step 2: Migrate Source Domain from Classic to V2**: Run SageMaker Studio migration from Classic to V2 by running a `update_domain` action using `boto3` `sagemaker` client.
 
 
@@ -49,8 +69,9 @@ Migrates SageMaker Studio Domain from Classic to V2. This migration action happe
 
 See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
 
+Before pushing your code, run pre-commit to ensure your changes pass all checks:
+```make pre-commit```
 
 ## License
 
 This library is licensed under the MIT-0 License. See the LICENSE file.
-
