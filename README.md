@@ -36,8 +36,9 @@ The table below provides a scenario and a sample cloudformation or terraform tem
 
 | Template Description      | AWS CloudFormation | HashiCorp Terraform |
 | :------------------------ | :-----------:  | :--------:|
-| Create SageMaker Studio, User Profile in `PublicInternetOnly` mode     | [<img src="./media/cfnicon.jpg" width="50" height="50" />](./src-cloudformation-iac/create-studio-and-user-internet-only.yaml)       | [<img src="./media/tficon.png" width="45" height="45" />](./src-terraform-iac/create-studio-and-user-internet-only.tf)       |
-| Create SageMaker Studio, User Profile in `VPCOnly` mode  |  [<img src="./media/cfnicon.jpg" width="50" height="50" />](./src-cloudformation-iac/create-studio-and-user-vpc-only.yaml)        | [<img src="./media/tficon.png" width="45" height="45" />](./src-terraform-iac/create-studio-and-user-vpc-only.tf)       |
+| Create SageMaker Studio, User Profile (with SageMakerFullAccess) in `PublicInternetOnly` mode     | [<img src="./media/cfnicon.jpg" width="50" height="50" />](./src-cloudformation-iac/create-studio-and-user-internet-only.yaml)       | [<img src="./media/tficon.png" width="45" height="45" />](./src-terraform-iac/create-studio-and-user-internet-only.tf)       |
+| Create SageMaker Studio, User Profile (with SageMakerFullAccess) in `VPCOnly` mode  |  [<img src="./media/cfnicon.jpg" width="50" height="50" />](./src-cloudformation-iac/create-studio-and-user-vpc-only.yaml)        | [<img src="./media/tficon.png" width="45" height="45" />](./src-terraform-iac/create-studio-and-user-vpc-only.tf)       |
+| Create SageMaker Studio, Data Scientist User (Data Science Role) in `VPCOnly` mode  |  [<img src="./media/cfnicon.jpg" width="50" height="50" />](./src-cloudformation-iac/create-studio-and-datascientist-vpc-only.yaml)        | [<img src="./media/tficon.png" width="45" height="45" />](./src-terraform-iac/create-studio-and-datascientist-vpc-only.tf)       |
 
 
 ---
