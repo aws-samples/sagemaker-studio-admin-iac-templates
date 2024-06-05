@@ -1,0 +1,377 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create SageMaker Domain and a test user with full SageMaker Access in VPC Only Model with custom Subnet and Security Group settings
+
+Parameters:
+
+  DomainName:
+    Type: String
+    Default: "MyExampleDomain"
+    Description: SageMaker Studio Domain Name
+  
+  StudioUserName:
+    Type: String
+    Default: "mlops-engineer"
+    Description: SageMaker Studio User Name
+  
+  RefS3BucketARNforDomain:
+    Type: String
+    Default: "arn:aws:s3:::sagemaker-us-east-1-1234567890"
+    Description: Default Bucket used by users in a domain have rw access to this bucket - format sagemaker-region-account-id
+  
+  VPCId:
+    Type: String
+    Description: VPC Id for SageMaker Studio
+    Default: "vpc-xxxxxx"
+  
+  SubnetIds:
+    Type: String
+    Description: Subnet Ids for SageMaker Studio
+    Default: "subnet-xxxxx or subnet-1xxxx,subnet-2xxxx,subnet-3xxxx"
+  
+  SecurityGroupsIds:
+    Type: String
+    Description: Security Groups Ids for SageMaker Studio
+    Default: "sg-xxxxx or sg-1xxxx,sg-2xxxx,sg-3xxxx"
+
+Resources:
+
+  SageMakerStudioMLOpsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-${DomainName}-MLOps-Role"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - sagemaker.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: "/"
+
+  SageMakerMLS3AccessPolicy:
+    Type: "AWS::IAM::Policy"
+    Properties:
+      PolicyName: "SageMaker_MLS3Access_Policy"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Action:
+              - "s3:ListBucket"
+            Resource:
+              - !Ref RefS3BucketARNforDomain
+          - Effect: "Allow"
+            Action:
+              - "s3:GetObject"
+              - "s3:PutObject"
+              - "s3:DeleteObject"
+            Resource:
+              - Fn::Join:
+                  - ""
+                  - - !Ref RefS3BucketARNforDomain
+                    - "/*"
+      Roles:
+        - !Ref SageMakerStudioMLOpsRole
+  
+  SageMakerMLExperimentVizPolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties: 
+      PolicyName: 'SageMaker_MLExperimentViz_Policy'
+      PolicyDocument: 
+        Version: '2012-10-17'
+        Statement: 
+          - Effect: 'Allow'
+            Action: 
+              - 'sagemaker:DescribeAction'
+              - 'sagemaker:DescribeArtifact'
+              - 'sagemaker:DescribeContext'
+              - 'sagemaker:DescribeExperiment'
+              - 'sagemaker:DescribeTrial'
+              - 'sagemaker:DescribeTrialComponent'
+              - 'sagemaker:DescribeLineageGroup'
+            Resource: 'arn:aws:sagemaker:*:*:*/*'
+          - Effect: 'Allow'
+            Action: 
+              - 'sagemaker:ListAssociations'
+              - 'sagemaker:ListActions'
+              - 'sagemaker:ListArtifacts'
+              - 'sagemaker:ListContexts'
+              - 'sagemaker:ListExperiments'
+              - 'sagemaker:ListTrials'
+              - 'sagemaker:ListTrialComponents'
+              - 'sagemaker:ListLineageGroups'
+              - 'sagemaker:GetLineageGroupPolicy'
+              - 'sagemaker:QueryLineage'
+              - 'sagemaker:Search'
+              - 'sagemaker:GetSearchSuggestions'
+            Resource: '*'
+      Roles: 
+        - !Ref SageMakerStudioMLOpsRole
+
+  SageMakerMLModelManagementPolicy:
+    Type: "AWS::IAM::Policy"
+    Properties: 
+      PolicyName: "SageMaker_MLModelManagement_Policy"
+      PolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - Effect: "Allow"
+            Action: 
+              - "sagemaker:CreateModel"
+              - "sagemaker:CreateModelPackage"
+              - "sagemaker:CreateModelPackageGroup"
+              - "sagemaker:DescribeModel"
+              - "sagemaker:DescribeModelPackage"
+              - "sagemaker:DescribeModelPackageGroup"
+              - "sagemaker:BatchDescribeModelPackage"
+              - "sagemaker:UpdateModelPackage"
+              - "sagemaker:DeleteModel"
+              - "sagemaker:DeleteModelPackage"
+              - "sagemaker:DeleteModelPackageGroup"
+            Resource: 
+              - "arn:aws:sagemaker:*:*:*/*"
+          - Effect: "Allow"
+            Action: 
+              - "sagemaker:ListModels"
+              - "sagemaker:ListModelPackages"
+              - "sagemaker:ListModelPackageGroups"
+            Resource: "*"
+          - Effect: "Allow"
+            Action: "iam:PassRole"
+            Resource: 
+              - !Sub "arn:aws:iam::${AWS::AccountId}:role/service-role/${AWS::StackName}-${DomainName}-MLOps-Role"
+            Condition: 
+              StringEquals: 
+                "iam:PassedToService": "sagemaker.amazonaws.com"
+      Roles: 
+        - !Ref SageMakerStudioMLOpsRole
+  
+  SageMakerMLOpsPipelinePolicy:
+    Type: AWS::IAM::Policy
+    Properties: 
+      PolicyName: SageMaker_MLOpsPipeline_Policy
+      PolicyDocument: 
+        Version: '2012-10-17'
+        Statement: 
+          - Effect: Allow
+            Action: 
+              - sagemaker:CreatePipeline
+              - sagemaker:StartPipelineExecution
+              - sagemaker:StopPipelineExecution
+              - sagemaker:RetryPipelineExecution
+              - sagemaker:UpdatePipelineExecution
+              - sagemaker:SendPipelineExecutionStepSuccess
+              - sagemaker:SendPipelineExecutionStepFailure
+              - sagemaker:DescribePipeline
+              - sagemaker:DescribePipelineExecution
+              - sagemaker:DescribePipelineDefinitionForExecution
+              - sagemaker:DeletePipeline
+            Resource: 
+              - arn:aws:sagemaker:*:*:*/*
+          - Effect: Allow
+            Action: 
+              - sagemaker:ListPipelines
+              - sagemaker:ListPipelineExecutions
+              - sagemaker:ListPipelineExecutionSteps
+              - sagemaker:ListPipelineParametersForExecution
+            Resource: '*'
+          - Effect: Allow
+            Action: 
+              - iam:PassRole
+            Resource: 
+              - !Sub "arn:aws:iam::${AWS::AccountId}:role/service-role/${AWS::StackName}-${DomainName}-MLOps-Role"
+            Condition: 
+              StringEquals: 
+                iam:PassedToService: sagemaker.amazonaws.com
+      Roles: 
+        - !Ref SageMakerStudioMLOpsRole
+
+  SageMakerMLEndpointsPolicy:
+    Type: AWS::IAM::Policy
+    Properties: 
+      PolicyName: SageMaker_MLEndpoints_Policy
+      PolicyDocument: 
+        Version: '2012-10-17'
+        Statement: 
+          - Effect: Allow
+            Action: 
+              - sagemaker:CreateEndpointConfig
+              - sagemaker:CreateEndpoint
+              - sagemaker:DeleteEndpointConfig
+              - sagemaker:DeleteEndpoint
+              - sagemaker:UpdateEndpoint
+              - sagemaker:UpdateEndpointWeightsAndCapacities
+              - sagemaker:DescribeEndpoint
+              - sagemaker:DescribeEndpointConfig
+            Resource: 
+              - arn:aws:sagemaker:*:*:*/*
+          - Effect: Allow
+            Action: 
+              - sagemaker:ListEndpoints
+              - sagemaker:ListEndpointConfigs
+            Resource: '*'
+      Roles: 
+        - !Ref SageMakerStudioMLOpsRole
+  
+  SageMakerMLStudioAppPermissionPolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: 'SageMaker_MLStudioAppPermission_Policy'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'SMStudioUserProfileAppPermissionsCreateAndDelete'
+            Effect: 'Allow'
+            Action:
+              - 'sagemaker:CreateApp'
+              - 'sagemaker:DeleteApp'
+            Resource: 
+              - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:app/*'
+            Condition:
+              'Null':
+                sagemaker:OwnerUserProfileArn: 'true'
+          - Sid: 'SMStudioCreatePresignedDomainUrlForUserProfile'
+            Effect: 'Allow'
+            Action:
+              - 'sagemaker:CreatePresignedDomainUrl'
+            Resource: 
+              # - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:user-profile/${sagemaker:DomainId}/${sagemaker:UserProfileName}'
+              - Fn::Join:
+                  - ""
+                  - - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:user-profile/'
+                    - "${sagemaker:DomainId}/${sagemaker:UserProfileName}"
+          - Sid: 'SMStudioAppPermissionsListAndDescribe'
+            Effect: 'Allow'
+            Action:
+              - 'sagemaker:ListApps'
+              - 'sagemaker:ListDomains'
+              - 'sagemaker:ListUserProfiles'
+              - 'sagemaker:ListSpaces'
+              - 'sagemaker:DescribeApp'
+              - 'sagemaker:DescribeDomain'
+              - 'sagemaker:DescribeUserProfile'
+              - 'sagemaker:DescribeSpace'
+            Resource: 
+              - '*'
+          - Sid: 'SMStudioAppPermissionsTagOnCreate'
+            Effect: 'Allow'
+            Action:
+              - 'sagemaker:AddTags'
+            Resource: 
+              - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:*/*'
+            Condition:
+              'Null':
+                sagemaker:TaggingAction: 'false'
+          - Sid: 'SMStudioRestrictSharedSpacesWithoutOwners'
+            Effect: 'Allow'
+            Action:
+              - 'sagemaker:CreateSpace'
+              - 'sagemaker:UpdateSpace'
+              - 'sagemaker:DeleteSpace'
+            Resource: 
+              # - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:space/${sagemaker:DomainId}/*'
+              - Fn::Join:
+                  - ""
+                  - - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:space/'
+                    - "${sagemaker:DomainId}/*"
+            Condition:
+              'Null':
+                sagemaker:OwnerUserProfileArn: 'true'
+          - Sid: 'SMStudioRestrictSpacesToOwnerUserProfile'
+            Effect: 'Allow'
+            Action:
+              - 'sagemaker:CreateSpace'
+              - 'sagemaker:UpdateSpace'
+              - 'sagemaker:DeleteSpace'
+            Resource: 
+              # - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:space/${sagemaker:DomainId}/*'
+              - Fn::Join:
+                  - ""
+                  - - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:space/'
+                    - "${sagemaker:DomainId}/*"
+            Condition:
+              ArnLike:
+                sagemaker:OwnerUserProfileArn: 
+                  # - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:user-profile/${sagemaker:DomainId}/${sagemaker:UserProfileName}'
+                  - Fn::Join:
+                    - ""
+                    - - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:user-profile/'
+                      - "${sagemaker:DomainId}/*"
+              StringEquals:
+                sagemaker:SpaceSharingType:
+                  - 'Private'
+                  - 'Shared'
+          - Sid: 'SMStudioRestrictCreatePrivateSpaceAppsToOwnerUserProfile'
+            Effect: 'Allow'
+            Action:
+              - 'sagemaker:CreateApp'
+              - 'sagemaker:DeleteApp'
+            Resource: 
+              # - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:app/${sagemaker:DomainId}/*'
+              - Fn::Join:
+                  - ""
+                  - - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:app/'
+                    - "${sagemaker:DomainId}/*"
+            Condition:
+              ArnLike:
+                sagemaker:OwnerUserProfileArn: 
+                  # - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:user-profile/${sagemaker:DomainId}/${sagemaker:UserProfileName}'
+                  - Fn::Join:
+                    - ""
+                    - - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:user-profile/'
+                      - "${sagemaker:DomainId}/${sagemaker:UserProfileName}"
+              StringEquals:
+                sagemaker:SpaceSharingType:
+                  - 'Private'
+          - Sid: 'AllowAppActionsForSharedSpaces'
+            Effect: 'Allow'
+            Action:
+              - 'sagemaker:CreateApp'
+              - 'sagemaker:DeleteApp'
+            Resource: 'arn:aws:sagemaker:*:*:app/${sagemaker:DomainId}/*/*/*'
+            Condition:
+              StringEquals:
+                sagemaker:SpaceSharingType:
+                  - 'Shared'
+      Roles:
+        - !Ref SageMakerStudioMLOpsRole
+
+  SageMakerStudioVPCOnlyDomain:
+    Type: AWS::SageMaker::Domain
+    Properties:
+      AppNetworkAccessType: VpcOnly
+      AuthMode: IAM
+      DomainName: !Ref DomainName
+      SubnetIds: !Split [",", !Ref SubnetIds ]
+      VpcId: !Ref VPCId
+      DefaultUserSettings:
+        SecurityGroups: !Split [",", !Ref SecurityGroupsIds ]
+        ExecutionRole: !GetAtt SageMakerStudioMLOpsRole.Arn
+  
+  UserProfile:
+    Type: AWS::SageMaker::UserProfile
+    Properties:
+      DomainId: !Ref SageMakerStudioVPCOnlyDomain
+      UserProfileName: !Ref StudioUserName
+      UserSettings:
+        ExecutionRole: !GetAtt SageMakerStudioMLOpsRole.Arn
+
+Outputs:
+
+  NewSageMakerDomain:
+    Description: "New Domain Id"
+    Value: !Ref SageMakerStudioVPCOnlyDomain
+  
+  NewSageMakerExecutionRole:
+    Description: "SageMaker MLOps Role"
+    Value: !Ref SageMakerStudioMLOpsRole
+  
+  SageMakerDomainUrl:
+    Value: !Join
+      - ''
+      - - 'https://console.aws.amazon.com/sagemaker/home?region='
+        - !Ref 'AWS::Region'
+        - '#/studio/'
+        - !Ref SageMakerStudioVPCOnlyDomain
+    Description: URL to access the SageMaker Domain
