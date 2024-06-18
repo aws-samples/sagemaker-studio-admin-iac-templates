@@ -1,192 +1,304 @@
 provider "aws" {
-  region = "us-west-2"  # Specify your region
+  region = "us-east-1" # specify your region
 }
 
-variable "user_profile_name" {
+variable "CURRoleName" {
+  description = "The name of the new Cost & Usage Reports IAM Role"
+  default     = "SageMakerCostUsageReportsRole"
+}
+
+variable "UserProfileName" {
   description = "The name of the new Cost & Usage Reports User Profile"
   default     = "studio-cur-user-profile"
 }
 
-resource "aws_iam_role" "SageMakerCostUsageReportsRole" {
-  name = "SageMakerCostUsageReportsRole"
+resource "aws_s3_bucket" "cur_bucket" {
+  bucket = "cur-bucket-${data.aws_caller_identity.current.account_id}"
+
+  versioning {
+    enabled = true
+  }
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm = "AES256"
+      }
+    }
+  }
+
+  lifecycle_rule {
+    enabled = true
+    abort_incomplete_multipart_upload_days = 1
+  }
+
+  public_access_block {
+    block_public_acls   = true
+    block_public_policy = true
+    ignore_public_acls  = true
+    restrict_public_buckets = true
+  }
+}
+
+data "aws_caller_identity" "current" {}
+
+resource "aws_glue_catalog_database" "cur_database" {
+  name = "cur_database"
+}
+
+resource "aws_iam_role" "cur_glue_crawler_role" {
+  name = "CURGlueCrawlerRole"
 
   assume_role_policy = jsonencode({
-    Version : "2012-10-17"
-    Statement : [
-      {
-        Effect : "Allow"
-        Principal : {
-          Service : [
-            "sagemaker.amazonaws.com",
-            "athena.amazonaws.com",
-            "quicksight.amazonaws.com",
-            "s3.amazonaws.com"
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "glue.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+
+  inline_policy {
+    name = "GlueCrawlerS3Access"
+    policy = jsonencode({
+      Version = "2012-10-17"
+      Statement = [{
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          "arn:aws:s3:::cur-bucket-${data.aws_caller_identity.current.account_id}/*",
+          "arn:aws:s3:::cur-bucket-${data.aws_caller_identity.current.account_id}"
+        ]
+      }]
+    })
+  }
+}
+
+resource "aws_glue_crawler" "cur_crawler" {
+  name          = "cur_crawler"
+  role          = aws_iam_role.cur_glue_crawler_role.arn
+  database_name = aws_glue_catalog_database.cur_database.name
+
+  s3_target {
+    path = "s3://cur-bucket-${data.aws_caller_identity.current.account_id}/sagemaker-cur/"
+  }
+
+  schedule = "cron(0 12 * * ? *)"
+  table_prefix = "cur_"
+}
+
+resource "aws_athena_workgroup" "cur_workgroup" {
+  name        = "AthenaWorkGroup"
+  description = "WorkGroup for CUR Athena Queries"
+  state       = "ENABLED"
+  recursive_delete_option = true
+
+  configuration {
+    bytes_scanned_cutoff_per_query = 200000000
+    enforce_workgroup_configuration = false
+    publish_cloudwatch_metrics_enabled = true
+    requester_pays_enabled = false
+    result_configuration {
+      output_location = "s3://cur-bucket-${data.aws_caller_identity.current.account_id}/athena-results/"
+    }
+  }
+}
+
+resource "aws_iam_role" "quicksight_iam_role" {
+  name = "QuickSightIAMRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "quicksight.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+
+  inline_policy {
+    name = "QuickSightAccess"
+    policy = jsonencode({
+      Version = "2012-10-17"
+      Statement = [
+        {
+          Effect = "Allow"
+          Action = [
+            "s3:GetObject",
+            "s3:ListBucket"
+          ]
+          Resource = [
+            "arn:aws:s3:::cur-bucket-${data.aws_caller_identity.current.account_id}/*",
+            "arn:aws:s3:::cur-bucket-${data.aws_caller_identity.current.account_id}"
+          ]
+        },
+        {
+          Effect = "Allow"
+          Action = [
+            "athena:StartQueryExecution",
+            "athena:GetQueryResults",
+            "athena:ListQueryExecutions"
+          ]
+          Resource = [
+            "arn:aws:athena:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:workgroup/AthenaWorkGroup",
+            "arn:aws:athena:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:query/*"
+          ]
+        },
+        {
+          Effect = "Allow"
+          Action = [
+            "glue:GetTable",
+            "glue:GetTableVersion",
+            "glue:GetTableVersions",
+            "glue:GetDatabase"
+          ]
+          Resource = [
+            "arn:aws:glue:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:catalog",
+            "arn:aws:glue:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:database/cur_database",
+            "arn:aws:glue:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/cur_database/*"
           ]
         }
-        Action : "sts:AssumeRole"
-      }
-    ]
-  })
+      ]
+    })
+  }
 }
 
-resource "aws_iam_policy" "SageMakerCommonActionsPolicy" {
-  name = "SageMakerCommonActionsPolicy"
+resource "aws_iam_role" "sagemaker_cost_usage_reports_role" {
+  name = var.CURRoleName
 
-  policy = jsonencode({
-    Version : "2012-10-17"
-    Statement : [
-      {
-        Effect : "Allow"
-        Action : [
-          "sagemaker:List*",
-          "sagemaker:Describe*",
-          "sagemaker:InvokeEndpoint"
-        ]
-        Resource : [
-          "arn:aws:sagemaker:${var.region}:${data.aws_caller_identity.current.account_id}:*"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = [
+          "sagemaker.amazonaws.com",
+          "athena.amazonaws.com",
+          "quicksight.amazonaws.com",
+          "s3.amazonaws.com"
         ]
       }
-    ]
+      Action = "sts:AssumeRole"
+    }]
   })
-}
 
-resource "aws_iam_policy" "AthenaAccessPolicy" {
-  name = "AthenaAccessPolicy"
-
-  policy = jsonencode({
-    Version : "2012-10-17"
-    Statement : [
-      {
-        Effect : "Allow"
-        Action : [
+  inline_policy {
+    name = "AthenaAccessPolicy"
+    policy = jsonencode({
+      Version = "2012-10-17"
+      Statement = [{
+        Effect = "Allow"
+        Action = [
           "athena:StartQueryExecution",
           "athena:GetQueryResults",
           "athena:ListQueryExecutions"
         ]
-        Resource : [
-          "arn:aws:athena:${var.region}:${data.aws_caller_identity.current.account_id}:workgroup/*",
-          "arn:aws:athena:${var.region}:${data.aws_caller_identity.current.account_id}:query/*"
+        Resource = [
+          "arn:aws:athena:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:workgroup/*",
+          "arn:aws:athena:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:query/*"
         ]
-      }
-    ]
-  })
-}
+      }]
+    })
+  }
 
-resource "aws_iam_policy" "QuickSightAccessPolicy" {
-  name = "QuickSightAccessPolicy"
-
-  policy = jsonencode({
-    Version : "2012-10-17"
-    Statement : [
-      {
-        Effect : "Allow"
-        Action : [
+  inline_policy {
+    name = "QuickSightAccessPolicy"
+    policy = jsonencode({
+      Version = "2012-10-17"
+      Statement = [{
+        Effect = "Allow"
+        Action = [
           "quicksight:Describe*",
           "quicksight:List*"
         ]
-        Resource : [
-          "arn:aws:quicksight:${var.region}:${data.aws_caller_identity.current.account_id}:user/${data.aws_caller_identity.current.account_id}/*",
-          "arn:aws:quicksight:${var.region}:${data.aws_caller_identity.current.account_id}:dataset/*",
-          "arn:aws:quicksight:${var.region}:${data.aws_caller_identity.current.account_id}:analysis/*",
-          "arn:aws:quicksight:${var.region}:${data.aws_caller_identity.current.account_id}:dashboard/*",
-          "arn:aws:quicksight:${var.region}:${data.aws_caller_identity.current.account_id}:namespace/default"
+        Resource = [
+          "arn:aws:quicksight:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:user/${data.aws_caller_identity.current.account_id}/*",
+          "arn:aws:quicksight:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:dataset/*",
+          "arn:aws:quicksight:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:analysis/*",
+          "arn:aws:quicksight:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:dashboard/*",
+          "arn:aws:quicksight:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:namespace/default"
         ]
-      }
-    ]
-  })
-}
+      }]
+    })
+  }
 
-resource "aws_iam_policy" "CURAccessPolicy" {
-  name = "CURAccessPolicy"
-
-  policy = jsonencode({
-    Version : "2012-10-17"
-    Statement : [
-      {
-        Effect : "Allow"
-        Action : [
+  inline_policy {
+    name = "CURAccessPolicy"
+    policy = jsonencode({
+      Version = "2012-10-17"
+      Statement = [{
+        Effect = "Allow"
+        Action = [
           "cur:DescribeReportDefinitions",
           "cur:GetReportData"
         ]
-        Resource : [
-          "arn:aws:cur:${var.region}:${data.aws_caller_identity.current.account_id}:report/*"
-        ]
-      }
-    ]
-  })
-}
+        Resource = "arn:aws:cur:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:report/*"
+      }]
+    })
+  }
 
-resource "aws_iam_policy" "S3AccessPolicy" {
-  name = "S3AccessPolicy"
-
-  policy = jsonencode({
-    Version : "2012-10-17"
-    Statement : [
-      {
-        Effect : "Allow"
-        Action : [
+  inline_policy {
+    name = "S3AccessPolicy"
+    policy = jsonencode({
+      Version = "2012-10-17"
+      Statement = [{
+        Effect = "Allow"
+        Action = [
           "s3:GetObject",
           "s3:ListBucket"
         ]
-        Resource : [
-          "arn:aws:s3:::your-s3-bucket-name/*",
-          "arn:aws:s3:::your-s3-bucket-name"
-        ]
-      }
-    ]
-  })
-}
+        Resource = "arn:aws:s3:::*"
+      }]
+    })
+  }
 
-resource "aws_iam_policy" "CostExplorerAccessPolicy" {
-  name = "CostExplorerAccessPolicy"
-
-  policy = jsonencode({
-    Version : "2012-10-17"
-    Statement : [
-      {
-        Effect : "Allow"
-        Action : [
+  inline_policy {
+    name = "CostExplorerAccessPolicy"
+    policy = jsonencode({
+      Version = "2012-10-17"
+      Statement = [{
+        Effect = "Allow"
+        Action = [
           "ce:GetCostAndUsage",
           "ce:GetCostForecast",
           "ce:GetReservationUtilization",
           "ce:GetSavingsPlansUtilization",
           "ce:DescribeCostCategoryDefinition"
         ]
-        Resource : "*"
-      }
-    ]
-  })
-}
+        Resource = "*"
+      }]
+    })
+  }
 
-resource "aws_iam_policy" "BudgetsAccessPolicy" {
-  name = "BudgetsAccessPolicy"
-
-  policy = jsonencode({
-    Version : "2012-10-17"
-    Statement : [
-      {
-        Effect : "Allow"
-        Action : [
+  inline_policy {
+    name = "BudgetsAccessPolicy"
+    policy = jsonencode({
+      Version = "2012-10-17"
+      Statement = [{
+        Effect = "Allow"
+        Action = [
           "budgets:ViewBudget",
           "budgets:ModifyBudget"
         ]
-        Resource : [
-          "arn:aws:budgets::${data.aws_caller_identity.current.account_id}:budget/*"
-        ]
-      }
-    ]
-  })
-}
+        Resource = "arn:aws:budgets::${data.aws_caller_identity.current.account_id}:budget/*"
+      }]
+    })
+  }
 
-resource "aws_iam_policy" "SageMakerCanvasDenyPolicy" {
-  name = "SageMakerCanvasDenyPolicy"
-
-  policy = jsonencode({
-    Version : "2012-10-17"
-    Statement : [
-      {
-        Effect : "Deny"
-        Action : [
+  inline_policy {
+    name = "SageMakerCanvasDenyPolicy"
+    policy = jsonencode({
+      Version = "2012-10-17"
+      Statement = [{
+        Effect = "Deny"
+        Action = [
           "sagemaker:CreateCanvasApp",
           "sagemaker:DeleteCanvasApp",
           "sagemaker:ListCanvasApp",
@@ -195,150 +307,31 @@ resource "aws_iam_policy" "SageMakerCanvasDenyPolicy" {
           "sagemaker:StartCanvasApp",
           "sagemaker:StopCanvasApp"
         ]
-        Resource : [
-          "arn:aws:sagemaker:${var.region}:${data.aws_caller_identity.current.account_id}:canvas-app/*"
-        ]
-      }
-    ]
-  })
+        Resource = "arn:aws:sagemaker:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:canvas-app/*"
+      }]
+    })
+  }
 }
 
-resource "aws_iam_policy" "SageMakerStudioAppPermissionsPolicy" {
-  name = "SageMakerStudioAppPermissionsPolicy"
-
-  policy = jsonencode({
-    Version : "2012-10-17"
-    Statement : [
-      {
-        Effect : "Allow"
-        Action : [
-          "sagemaker:CreateApp",
-          "sagemaker:DeleteApp"
-        ]
-        Resource : "arn:aws:sagemaker:${var.region}:${data.aws_caller_identity.current.account_id}:app/*"
-        Condition : {
-          "Null" : {
-            "sagemaker:OwnerUserProfileArn" : "true"
-          }
-        }
-      },
-      {
-        Effect : "Allow"
-        Action : "sagemaker:CreatePresignedDomainUrl"
-        Resource : "arn:aws:sagemaker:${var.region}:${data.aws_caller_identity.current.account_id}:user-profile/${var.sagemaker_domain_id}/${var.user_profile_name}"
-      },
-      {
-        Effect : "Allow"
-        Action : [
-          "sagemaker:ListApps",
-          "sagemaker:ListDomains",
-          "sagemaker:ListUserProfiles",
-          "sagemaker:ListSpaces",
-          "sagemaker:DescribeApp",
-          "sagemaker:DescribeDomain",
-          "sagemaker:DescribeUserProfile",
-          "sagemaker:DescribeSpace"
-        ]
-        Resource : "*"
-      },
-      {
-        Effect : "Allow"
-        Action : "sagemaker:AddTags"
-        Resource : "arn:aws:sagemaker:${var.region}:${data.aws_caller_identity.current.account_id}:*/*"
-        Condition : {
-          "Null" : {
-            "sagemaker:TaggingAction" : "false"
-          }
-        }
-      },
-      {
-        Effect : "Allow"
-        Action : [
-          "sagemaker:CreateSpace",
-          "sagemaker:UpdateSpace",
-          "sagemaker:DeleteSpace"
-        ]
-        Resource : "arn:aws:sagemaker:${var.region}:${data.aws_caller_identity.current.account_id}:space/${var.sagemaker_domain_id}/*"
-        Condition : {
-          "Null" : {
-            "sagemaker:OwnerUserProfileArn" : "true"
-          }
-        }
-      },
-      {
-        Effect : "Allow"
-        Action : [
-          "sagemaker:CreateSpace",
-          "sagemaker:UpdateSpace",
-          "sagemaker:DeleteSpace"
-        ]
-        Resource : "arn:aws:sagemaker:${var.region}:${data.aws_caller_identity.current.account_id}:space/${var.sagemaker_domain_id}/*"
-        Condition : {
-          "ArnLike" : {
-            "sagemaker:OwnerUserProfileArn" : "arn:aws:sagemaker:${var.region}:${data.aws_caller_identity.current.account_id}:user-profile/${var.sagemaker_domain_id}/${var.user_profile_name}"
-          },
-          "StringEquals" : {
-            "sagemaker:SpaceSharingType" : [
-              "Private",
-              "Shared"
-            ]
-          }
-        }
-      },
-      {
-        Effect : "Allow"
-        Action : [
-          "sagemaker:CreateApp",
-          "sagemaker:DeleteApp"
-        ]
-        Resource : "arn:aws:sagemaker:${var.region}:${data.aws_caller_identity.current.account_id}:app/${var.sagemaker_domain_id}/*"
-        Condition : {
-          "ArnLike" : {
-            "sagemaker:OwnerUserProfileArn" : "arn:aws:sagemaker:${var.region}:${data.aws_caller_identity.current.account_id}:user-profile/${var.sagemaker_domain_id}/${var.user_profile_name}"
-          },
-          "StringEquals" : {
-            "sagemaker:SpaceSharingType" : "Private"
-          }
-        }
-      },
-      {
-        Effect : "Deny"
-        Sid : "DenySageMakerCanvasCreateApp"
-        Action : "sagemaker:CreateApp"
-        Resource : "arn:aws:sagemaker:${var.region}:${data.aws_caller_identity.current.account_id}:app/${var.sagemaker_domain_id}/${var.user_profile_name}/canvas/*"
-      },
-      {
-        Effect : "Allow"
-        Action : [
-          "sagemaker:CreateApp",
-          "sagemaker:DeleteApp"
-        ]
-        Resource : "arn:aws:sagemaker:*:*:app/${var.sagemaker_domain_id}/*/*/*"
-        Condition : {
-          "StringEquals" : {
-            "sagemaker:SpaceSharingType" : "Shared"
-          }
-        }
-      }
-    ]
-  })
-}
-
-resource "aws_sagemaker_user_profile" "SageMakerUserProfile" {
-  domain_id        = var.sagemaker_domain_id
-  user_profile_name = var.user_profile_name
+resource "aws_sagemaker_user_profile" "user_profile" {
+  domain_id         = data.aws_sagemaker_domain.domain.id
+  user_profile_name = var.UserProfileName
 
   user_settings {
-    execution_role = aws_iam_role.SageMakerCostUsageReportsRole.arn
+    execution_role = aws_iam_role.sagemaker_cost_usage_reports_role.arn
   }
+}
+
+data "aws_sagemaker_domain" "domain" {
+  name = "your-sagemaker-domain-name"  # Replace with your actual SageMaker domain name
 }
 
 output "SageMakerCostUsageReportsRoleARN" {
   description = "ARN of the IAM role for SageMaker cost usage reports"
-  value       = aws_iam_role.SageMakerCostUsageReportsRole.arn
+  value       = aws_iam_role.sagemaker_cost_usage_reports_role.arn
 }
 
 output "SageMakerUserProfileName" {
   description = "Name of the SageMaker User Profile for cost optimization"
-  value       = aws_sagemaker_user_profile.SageMakerUserProfile.id
+  value       = aws_sagemaker_user_profile.user_profile.user_profile_name
 }

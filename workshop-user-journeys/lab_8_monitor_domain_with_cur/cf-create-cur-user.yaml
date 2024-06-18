@@ -2,16 +2,129 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'IAM Role and SageMaker User Profile for Cost Optimization Blog'
 
 Parameters:
+  CURRoleName:
+    Type: String
+    Description: The name of the new Cost & Usage Reports IAM Role
+    Default: SageMakerCostUsageReportsRole
   UserProfileName:
     Type: String
     Description: The name of the new Cost & Usage Reports User Profile
     Default: studio-cur-user-profile
 
 Resources:
+
+  CURS3Bucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub "cur-bucket-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  CURGlueDatabase:
+    Type: 'AWS::Glue::Database'
+    Properties:
+      CatalogId: !Ref 'AWS::AccountId'
+      DatabaseInput:
+        Name: cur_database
+
+  CURGlueCrawlerRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'glue.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: GlueCrawlerS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !Sub "arn:aws:s3:::cur-bucket-${AWS::AccountId}/*"
+                  - !Sub "arn:aws:s3:::cur-bucket-${AWS::AccountId}"
+
+  CURGlueCrawler:
+    Type: 'AWS::Glue::Crawler'
+    Properties:
+      Role: !GetAtt CURGlueCrawlerRole.Arn
+      DatabaseName: !Ref CURGlueDatabase
+      Targets:
+        S3Targets:
+          - Path: !Sub "s3://cur-bucket-${AWS::AccountId}/sagemaker-cur/"
+      Schedule:
+        ScheduleExpression: 'cron(0 12 * * ? *)'
+      TablePrefix: cur_
+
+  AthenaWorkGroup:
+    Type: 'AWS::Athena::WorkGroup'
+    Properties:
+      Name: AthenaWorkGroup
+      Description: "WorkGroup for CUR Athena Queries"
+      State: ENABLED
+      RecursiveDeleteOption: true
+      WorkGroupConfiguration:
+        BytesScannedCutoffPerQuery: 200000000
+        EnforceWorkGroupConfiguration: false
+        PublishCloudWatchMetricsEnabled: true
+        RequesterPaysEnabled: false
+        ResultConfiguration:
+          OutputLocation: !Sub "s3://cur-bucket-${AWS::AccountId}/athena-results/"
+
+  QuickSightIAMRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'quicksight.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: QuickSightAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !Sub "arn:aws:s3:::cur-bucket-${AWS::AccountId}/*"
+                  - !Sub "arn:aws:s3:::cur-bucket-${AWS::AccountId}"
+              - Effect: 'Allow'
+                Action:
+                  - 'athena:StartQueryExecution'
+                  - 'athena:GetQueryResults'
+                  - 'athena:ListQueryExecutions'
+                Resource:
+                  - !Sub "arn:aws:athena:${AWS::Region}:${AWS::AccountId}:workgroup/AthenaWorkGroup"
+                  - !Sub "arn:aws:athena:${AWS::Region}:${AWS::AccountId}:query/*"
+              - Effect: 'Allow'
+                Action:
+                  - 'glue:GetTable'
+                  - 'glue:GetTableVersion'
+                  - 'glue:GetTableVersions'
+                  - 'glue:GetDatabase'
+                Resource:
+                  - !Sub "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:catalog"
+                  - !Sub "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:database/cur_database"
+                  - !Sub "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:table/cur_database/*"
+
   SageMakerCostUsageReportsRole:
     Type: 'AWS::IAM::Role'
     Properties: 
-      RoleName: 'SageMakerCostUsageReportsRole'
+      RoleName: !Ref CURRoleName
       AssumeRolePolicyDocument: 
         Version: '2012-10-17'
         Statement: 
@@ -24,17 +137,6 @@ Resources:
                 - 's3.amazonaws.com'
             Action: 'sts:AssumeRole'
       Policies: 
-        - PolicyName: 'SageMakerCommonActionsPolicy'
-          PolicyDocument: 
-            Version: '2012-10-17'
-            Statement: 
-              - Effect: 'Allow'
-                Action: 
-                  - 'sagemaker:List*'
-                  - 'sagemaker:Describe*'
-                  - 'sagemaker:InvokeEndpoint'
-                Resource: 
-                  - !Sub "arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:*"
 
         - PolicyName: 'AthenaAccessPolicy'
           PolicyDocument: 
@@ -83,9 +185,7 @@ Resources:
                 Action: 
                   - 's3:GetObject'
                   - 's3:ListBucket'
-                Resource: 
-                  - !Sub "arn:aws:s3:::your-s3-bucket-name/*"
-                  - !Sub "arn:aws:s3:::your-s3-bucket-name"
+                Resource: arn:aws:s3:::*
 
         - PolicyName: 'CostExplorerAccessPolicy'
           PolicyDocument: 
@@ -127,146 +227,6 @@ Resources:
                   - 'sagemaker:StopCanvasApp'
                 Resource: 
                   - !Sub "arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:canvas-app/*"
-
-        - PolicyName: 'SageMakerStudioAppPermissionsPolicy'
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - 
-                Effect: Allow
-                Action:
-                  - sagemaker:CreateApp
-                  - sagemaker:DeleteApp
-                Resource: !Sub "arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:app/*"
-                Condition:
-                  "Null":
-                    "sagemaker:OwnerUserProfileArn": "true"
-              - 
-                Effect: Allow
-                Action:
-                  - sagemaker:CreatePresignedDomainUrl
-                Resource:
-                  !Join
-                    - ''
-                    - - 'arn:aws:sagemaker:'
-                      - !Ref 'AWS::Region'
-                      - ':'
-                      - !Ref 'AWS::AccountId'
-                      - ':user-profile/${sagemaker:DomainId}/${sagemaker:UserProfileName}'
-              - 
-                Effect: Allow
-                Action:
-                  - sagemaker:ListApps
-                  - sagemaker:ListDomains
-                  - sagemaker:ListUserProfiles
-                  - sagemaker:ListSpaces
-                  - sagemaker:DescribeApp
-                  - sagemaker:DescribeDomain
-                  - sagemaker:DescribeUserProfile
-                  - sagemaker:DescribeSpace
-                Resource: "*"
-              - 
-                Effect: Allow
-                Action:
-                  - sagemaker:AddTags
-                Resource: !Sub "arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:*/*"
-                Condition:
-                  "Null":
-                    "sagemaker:TaggingAction": "false"
-              - 
-                Effect: Allow
-                Action:
-                  - sagemaker:CreateSpace
-                  - sagemaker:UpdateSpace
-                  - sagemaker:DeleteSpace
-                Resource:
-                  !Join
-                    - ''
-                    - - 'arn:aws:sagemaker:'
-                      - !Ref 'AWS::Region'
-                      - ':'
-                      - !Ref 'AWS::AccountId'
-                      - ':space/${sagemaker:DomainId}/*'
-                Condition:
-                  "Null":
-                    "sagemaker:OwnerUserProfileArn": "true"
-              - 
-                Effect: Allow
-                Action:
-                  - sagemaker:CreateSpace
-                  - sagemaker:UpdateSpace
-                  - sagemaker:DeleteSpace
-                Resource:
-                  !Join
-                    - ''
-                    - - 'arn:aws:sagemaker:'
-                      - !Ref 'AWS::Region'
-                      - ':'
-                      - !Ref 'AWS::AccountId'
-                      - ':space/${sagemaker:DomainId}/*'
-                Condition:
-                  ArnLike:
-                    "sagemaker:OwnerUserProfileArn": 
-                      !Join
-                        - ''
-                        - - 'arn:aws:sagemaker:'
-                          - !Ref 'AWS::Region'
-                          - ':'
-                          - !Ref 'AWS::AccountId'
-                          - ':user-profile/${sagemaker:DomainId}/${sagemaker:UserProfileName}'
-                  StringEquals:
-                    "sagemaker:SpaceSharingType":
-                      - "Private"
-                      - "Shared"
-              - 
-                Effect: Allow
-                Action:
-                  - sagemaker:CreateApp
-                  - sagemaker:DeleteApp
-                Resource:
-                  !Join
-                    - ''
-                    - - 'arn:aws:sagemaker:'
-                      - !Ref 'AWS::Region'
-                      - ':'
-                      - !Ref 'AWS::AccountId'
-                      - ':app/${sagemaker:DomainId}/*'
-                Condition:
-                  ArnLike:
-                    "sagemaker:OwnerUserProfileArn":
-                      !Join
-                        - ''
-                        - - 'arn:aws:sagemaker:'
-                          - !Ref 'AWS::Region'
-                          - ':'
-                          - !Ref 'AWS::AccountId'
-                          - ':user-profile/${sagemaker:DomainId}/${sagemaker:UserProfileName}'
-                  StringEquals:
-                    "sagemaker:SpaceSharingType":
-                      - "Private"
-              - 
-                Effect: Deny
-                Sid: DenySageMakerCanvasCreateApp
-                Action:
-                  - sagemaker:CreateApp
-                Resource:
-                  !Join
-                    - ''
-                    - - 'arn:aws:sagemaker:'
-                      - !Ref 'AWS::Region'
-                      - ':'
-                      - !Ref 'AWS::AccountId'
-                      - ':app/${sagemaker:DomainId}/${sagemaker:UserProfileName}/canvas/*'
-              - 
-                Effect: Allow
-                Action:
-                  - sagemaker:CreateApp
-                  - sagemaker:DeleteApp
-                Resource: "arn:aws:sagemaker:*:*:app/${sagemaker:DomainId}/*/*/*"
-                Condition:
-                  StringEquals:
-                    "sagemaker:SpaceSharingType":
-                      - "Shared"
 
   SageMakerUserProfile:
     Type: 'AWS::SageMaker::UserProfile'
