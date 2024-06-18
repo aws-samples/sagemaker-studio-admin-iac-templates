@@ -1,0 +1,795 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  This .
+
+Mappings:
+  ClusterConfigurations:
+    emr:
+      BootStrapScriptFile: https://raw.githubusercontent.com/pranavvm26/sagemaker-studio-emr/main/cloudformation/getting_started/emr_bootstrapping/installpylibs-py39.sh
+      StepScriptFile: https://raw.githubusercontent.com/pranavvm26/sagemaker-studio-emr/main/cloudformation/getting_started/emr_bootstrapping/configurekdc.sh
+
+Parameters:
+
+  DataScienceUserProfileName:
+    Type: String
+    Description: SageMaker Studio User Profile Name
+    Default: data-scientist-with-emr
+
+
+Resources:
+
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Join [ "-", [ "sagemaker-emr-template-cfn", !Select [ 2, !Split [ "/", !Ref AWS::StackId ] ] ] ]
+  
+  DataSciencewithEMRSageMakerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "AmazonSageMakerExecutionRole-${DataScienceUserProfileName}-${AWS::Region}"
+      Policies:
+        - PolicyName: iam-pass-role
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource:
+                  - !Join
+                    - ''
+                    - - 'arn:aws:iam::'
+                      - !Ref 'AWS::AccountId'
+                      - ':role/service-role/AmazonSageMakerExecutionRole-'
+                      - !Ref DataScienceUserProfileName
+                      - '-'
+                      - !Ref 'AWS::Region'
+                  - !Join
+                    - ''
+                    - - 'arn:aws:iam::'
+                      - !Ref 'AWS::AccountId'
+                      - ':role/AmazonSageMakerExecutionRole-'
+                      - !Ref DataScienceUserProfileName
+                      - '-'
+                      - !Ref 'AWS::Region'
+                Condition:
+                  StringEquals:
+                    "iam:PassedToService": "sagemaker.amazonaws.com"
+        - PolicyName: s3-access
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource: arn:aws:s3:::*
+        - PolicyName: emr-cluster-management-access
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - elasticmapreduce:DescribeCluster
+                  - elasticmapreduce:ListInstanceGroups
+                  - elasticmapreduce:CreatePersistentAppUI
+                  - elasticmapreduce:DescribePersistentAppUI
+                  - elasticmapreduce:GetPersistentAppUIPresignedURL
+                  - elasticmapreduce:GetOnClusterAppUIPresignedURL
+                  - elasticmapreduce:DescribeCluster
+                  - elasticmapreduce:ListInstances
+                  - elasticmapreduce:ListInstanceGroups
+                  - elasticmapreduce:DescribeSecurityConfiguration
+                Resource:
+                  - !Sub "arn:aws:elasticmapreduce:${AWS::Region}:${AWS::AccountId}:cluster/*"
+              - Effect: Allow
+                Action:
+                  - elasticmapreduce:ListClusters
+                  - servicecatalog:SearchProducts
+                  - servicecatalog:List* 
+                  - servicecatalog:Describe*"
+                  - sagemaker:ListTags 
+                  - sagemaker:AddTags
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - sagemaker:CreateProject
+                  - sagemaker:DeleteProject
+                Resource: !Sub "arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:project/*"
+              
+        - PolicyName: sagemaker-common-job-management
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sagemaker:CreateTrainingJob
+                  - sagemaker:CreateTransformJob
+                  - sagemaker:CreateProcessingJob
+                  - sagemaker:CreateAutoMLJob
+                  - sagemaker:CreateHyperParameterTuningJob
+                  - sagemaker:UpdateTrainingJob
+                Resource: arn:aws:sagemaker:*:*:*/*
+                Condition:
+                  ForAllValues:StringEquals:
+                    "sagemaker:VpcSecurityGroupIds":
+                      - !ImportValue SageMakerCloudformationSecurityGroup
+                    "sagemaker:VpcSubnets":
+                      - !ImportValue SageMakerCloudformationSubnetId
+                  "Null":
+                    "sagemaker:VpcSubnets": false
+                    "sagemaker:VpcSecurityGroupIds": false
+              - Effect: Allow
+                Action:
+                  - sagemaker:StopTrainingJob
+                  - sagemaker:StopProcessingJob
+                  - sagemaker:StopAutoMLJob
+                  - sagemaker:StopHyperParameterTuningJob
+                  - sagemaker:DescribeTrainingJob
+                  - sagemaker:DescribeTransformJob
+                  - sagemaker:DescribeProcessingJob
+                  - sagemaker:DescribeAutoMLJob
+                  - sagemaker:DescribeHyperParameterTuningJob
+                  - sagemaker:BatchGetMetrics
+                Resource: arn:aws:sagemaker:*:*:*/*
+              - Effect: Allow
+                Action:
+                  - sagemaker:Search
+                  - sagemaker:ListTrainingJobs
+                  - sagemaker:ListTransformJobs
+                  - sagemaker:ListProcessingJobs
+                  - sagemaker:ListAutoMLJobs
+                  - sagemaker:ListCandidatesForAutoMLJob
+                  - sagemaker:ListHyperParameterTuningJobs
+                  - sagemaker:ListTrainingJobsForHyperParameterTuningJob
+                Resource: "*"
+        - PolicyName: sagemaker-experiments-management
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sagemaker:AddAssociation
+                  - sagemaker:CreateAction
+                  - sagemaker:CreateArtifact
+                  - sagemaker:CreateContext
+                  - sagemaker:CreateExperiment
+                  - sagemaker:CreateTrial
+                  - sagemaker:CreateTrialComponent
+                  - sagemaker:UpdateAction
+                  - sagemaker:UpdateArtifact
+                  - sagemaker:UpdateContext
+                  - sagemaker:UpdateExperiment
+                  - sagemaker:UpdateTrial
+                  - sagemaker:UpdateTrialComponent
+                  - sagemaker:AssociateTrialComponent
+                  - sagemaker:DisassociateTrialComponent
+                  - sagemaker:DeleteAssociation
+                  - sagemaker:DeleteAction
+                  - sagemaker:DeleteArtifact
+                  - sagemaker:DeleteContext
+                  - sagemaker:DeleteExperiment
+                  - sagemaker:DeleteTrial
+                  - sagemaker:DeleteTrialComponent
+                Resource: arn:aws:sagemaker:*:*:*/*
+        - PolicyName: sagemaker-experiments-visualization
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sagemaker:DescribeAction
+                  - sagemaker:DescribeArtifact
+                  - sagemaker:DescribeContext
+                  - sagemaker:DescribeExperiment
+                  - sagemaker:DescribeTrial
+                  - sagemaker:DescribeTrialComponent
+                  - sagemaker:DescribeLineageGroup
+                Resource: arn:aws:sagemaker:*:*:*/*
+              - Effect: Allow
+                Action:
+                  - sagemaker:ListAssociations
+                  - sagemaker:ListActions
+                  - sagemaker:ListArtifacts
+                  - sagemaker:ListContexts
+                  - sagemaker:ListExperiments
+                  - sagemaker:ListTrials
+                  - sagemaker:ListTrialComponents
+                  - sagemaker:ListLineageGroups
+                  - sagemaker:GetLineageGroupPolicy
+                  - sagemaker:QueryLineage
+                  - sagemaker:Search
+                  - sagemaker:GetSearchSuggestions
+                Resource: "*"
+        - PolicyName: sagemaker-model-management
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sagemaker:CreateModel
+                  - sagemaker:CreateModelPackage
+                  - sagemaker:CreateModelPackageGroup
+                  - sagemaker:DescribeModel
+                  - sagemaker:DescribeModelPackage
+                  - sagemaker:DescribeModelPackageGroup
+                  - sagemaker:BatchDescribeModelPackage
+                  - sagemaker:UpdateModelPackage
+                  - sagemaker:DeleteModel
+                  - sagemaker:DeleteModelPackage
+                  - sagemaker:DeleteModelPackageGroup
+                Resource: arn:aws:sagemaker:*:*:*/*
+              - Effect: Allow
+                Action:
+                  - sagemaker:ListModels
+                  - sagemaker:ListModelPackages
+                  - sagemaker:ListModelPackageGroups
+                Resource: "*"
+        - PolicyName: sagemaker-studio-app-permissions
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sagemaker:CreateApp
+                  - sagemaker:DeleteApp
+                Resource: !Sub "arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:app/*"
+                Condition:
+                  "Null":
+                    "sagemaker:OwnerUserProfileArn": "true"
+              - Effect: Allow
+                Action:
+                  - sagemaker:CreatePresignedDomainUrl
+                Resource:
+                  !Join
+                  - ''
+                  - - 'arn:aws:sagemaker:'
+                    - !Ref 'AWS::Region'
+                    - ':'
+                    - !Ref 'AWS::AccountId'
+                    - ':user-profile/${sagemaker:DomainId}/${sagemaker:UserProfileName}'
+              - Effect: Allow
+                Action:
+                  - sagemaker:ListApps
+                  - sagemaker:ListDomains
+                  - sagemaker:ListUserProfiles
+                  - sagemaker:ListSpaces
+                  - sagemaker:DescribeApp
+                  - sagemaker:DescribeDomain
+                  - sagemaker:DescribeUserProfile
+                  - sagemaker:DescribeSpace
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - sagemaker:AddTags
+                Resource: !Sub "arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:*/*"
+                Condition:
+                  "Null":
+                    "sagemaker:TaggingAction": "false"
+              - Effect: Allow
+                Action:
+                  - sagemaker:CreateSpace
+                  - sagemaker:UpdateSpace
+                  - sagemaker:DeleteSpace
+                Resource:
+                  !Join
+                  - ''
+                  - - 'arn:aws:sagemaker:'
+                    - !Ref 'AWS::Region'
+                    - ':'
+                    - !Ref 'AWS::AccountId'
+                    - ':space/${sagemaker:DomainId}/*'
+                Condition:
+                  "Null":
+                    "sagemaker:OwnerUserProfileArn": "true"
+              - Effect: Allow
+                Action:
+                  - sagemaker:CreateSpace
+                  - sagemaker:UpdateSpace
+                  - sagemaker:DeleteSpace
+                Resource:
+                  !Join
+                  - ''
+                  - - 'arn:aws:sagemaker:'
+                    - !Ref 'AWS::Region'
+                    - ':'
+                    - !Ref 'AWS::AccountId'
+                    - ':space/${sagemaker:DomainId}/*'
+                Condition:
+                  ArnLike:
+                    "sagemaker:OwnerUserProfileArn":
+                      !Join
+                      - ''
+                      - - 'arn:aws:sagemaker:'
+                        - !Ref 'AWS::Region'
+                        - ':'
+                        - !Ref 'AWS::AccountId'
+                        - ':user-profile/${sagemaker:DomainId}/${sagemaker:UserProfileName}'
+                  StringEquals:
+                    "sagemaker:SpaceSharingType":
+                      - "Private"
+                      - "Shared"
+              - Effect: Allow
+                Action:
+                  - sagemaker:CreateApp
+                  - sagemaker:DeleteApp
+                Resource:
+                  !Join
+                  - ''
+                  - - 'arn:aws:sagemaker:'
+                    - !Ref 'AWS::Region'
+                    - ':'
+                    - !Ref 'AWS::AccountId'
+                    - ':app/${sagemaker:DomainId}/*'
+                Condition:
+                  ArnLike:
+                    "sagemaker:OwnerUserProfileArn":
+                      !Join
+                      - ''
+                      - - 'arn:aws:sagemaker:'
+                        - !Ref 'AWS::Region'
+                        - ':'
+                        - !Ref 'AWS::AccountId'
+                        - ':user-profile/${sagemaker:DomainId}/${sagemaker:UserProfileName}'
+                  StringEquals:
+                    "sagemaker:SpaceSharingType":
+                      - "Private"
+              - Effect: Deny
+                Sid: DenySageMakerCanvasCreateApp
+                Action:
+                  - sagemaker:CreateApp
+                Resource:
+                  !Join
+                  - ''
+                  - - 'arn:aws:sagemaker:'
+                    - !Ref 'AWS::Region'
+                    - ':'
+                    - !Ref 'AWS::AccountId'
+                    - ':app/${sagemaker:DomainId}/${sagemaker:UserProfileName}/canvas/*'
+              - Effect: Allow
+                Action:
+                  - sagemaker:CreateApp
+                  - sagemaker:DeleteApp
+                Resource: "arn:aws:sagemaker:*:*:app/${sagemaker:DomainId}/*/*/*"
+                Condition:
+                  StringEquals:
+                    "sagemaker:SpaceSharingType":
+                      - "Shared"
+        - PolicyName: sagemaker-ecr-permissions
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:BatchGetImage
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:DescribeImages
+                  - ecr:DescribeRepositories
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:GetAuthorizationToken
+                Resource: "*"
+        - PolicyName: allow-aws-service-actions
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:DeleteAlarms
+                  - cloudwatch:DescribeAlarms
+                  - cloudwatch:GetMetricData
+                  - cloudwatch:GetMetricStatistics
+                  - cloudwatch:ListMetrics
+                  - cloudwatch:PutMetricAlarm
+                  - cloudwatch:PutMetricData
+                  - ec2:CreateNetworkInterface
+                  - ec2:CreateNetworkInterfacePermission
+                  - ec2:CreateVpcEndpoint
+                  - ec2:DeleteNetworkInterface
+                  - ec2:DeleteNetworkInterfacePermission
+                  - ec2:DescribeDhcpOptions
+                  - ec2:DescribeNetworkInterfaces
+                  - ec2:DescribeRouteTables
+                  - ec2:DescribeSecurityGroups
+                  - ec2:DescribeSubnets
+                  - ec2:DescribeVpcEndpoints
+                  - ec2:DescribeVpcs
+                  - logs:CreateLogDelivery
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:DeleteLogDelivery
+                  - logs:Describe*
+                  - logs:GetLogDelivery
+                  - logs:GetLogEvents
+                  - logs:ListLogDeliveries
+                  - logs:PutLogEvents
+                  - logs:PutResourcePolicy
+                  - logs:UpdateLogDelivery
+                Resource: "*"
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - sagemaker.amazonaws.com
+            Action:
+              - sts:AssumeRole
+          - Effect: Allow
+            Principal:
+              Service:
+                - bedrock.amazonaws.com
+            Action:
+              - sts:AssumeRole
+
+  DataScienceUserProfile:
+      Type: AWS::SageMaker::UserProfile
+      Properties:
+        DomainId: !ImportValue SageMakerDomainId
+        UserProfileName: !Ref DataScienceUserProfileName
+        UserSettings:
+          ExecutionRole: !GetAtt DataSciencewithEMRSageMakerExecutionRole.Arn
+  
+  # Products populated to Service Catalog
+  ###################################################  
+  
+  SageMakerStudioEMRNoAuthProduct:
+    Type: AWS::ServiceCatalog::CloudFormationProduct
+    Properties:
+      Owner: AWS
+      Name: SageMaker Studio Domain No Auth EMR
+      ProvisioningArtifactParameters:
+        - Name: SageMaker Studio Domain No Auth EMR
+          Description: Provisions a SageMaker domain and No Auth EMR Cluster
+          Info:
+            LoadTemplateFromURL: https://raw.githubusercontent.com/pranavvm26/sagemaker-studio-emr/main/cloudformation/getting_started/CFN-EMR-NoStudioNoAuthTemplate-v4.yaml
+      Tags:
+        - Key: "sagemaker:studio-visibility:emr"
+          Value: "true"
+ 
+  SageMakerStudioEMRNoAuthProductPortfolio:
+    Type: AWS::ServiceCatalog::Portfolio
+    Properties:
+      ProviderName: AWS
+      DisplayName: SageMaker Product Portfolio
+ 
+  SageMakerStudioEMRNoAuthProductPortfolioAssociation:
+    Type: AWS::ServiceCatalog::PortfolioProductAssociation
+    Properties:
+      PortfolioId: !Ref SageMakerStudioEMRNoAuthProductPortfolio
+      ProductId: !Ref SageMakerStudioEMRNoAuthProduct
+  
+  EMRNoAuthLaunchConstraint:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      Policies:
+        - PolicyDocument:
+            Statement:
+            - Action:
+              - s3:*
+              Effect: Allow
+              Resource:
+              - !Sub "arn:${AWS::Partition}:s3:::sagemaker-emr-template-cfn-*/*"
+              - !Sub "arn:${AWS::Partition}:s3:::sagemaker-emr-template-cfn-*"
+            - Action:
+              - s3:GetObject
+              Effect: Allow
+              Resource: "*"
+              Condition:
+                StringEquals:
+                  s3:ExistingObjectTag/servicecatalog:provisioning: 'true'
+          PolicyName: !Sub ${AWS::StackName}-${AWS::Region}-S3-Policy
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - "sns:Publish"
+                Effect: Allow
+                Resource: !Sub "arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:*"
+            Version: "2012-10-17"
+          PolicyName: SNSPublishPermissions
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - "ec2:CreateSecurityGroup"
+                  - "ec2:RevokeSecurityGroupEgress"
+                  - "ec2:DeleteSecurityGroup"
+                  - "ec2:createTags"
+                  - "iam:TagRole"
+                  - "ec2:AuthorizeSecurityGroupEgress"
+                  - "ec2:AuthorizeSecurityGroupIngress"
+                  - "ec2:RevokeSecurityGroupIngress"
+                Effect: Allow
+                Resource: "*"
+            Version: "2012-10-17"
+          PolicyName: EC2Permissions
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - "elasticmapreduce:RunJobFlow"
+                Effect: Allow
+                Resource: !Sub "arn:${AWS::Partition}:elasticmapreduce:${AWS::Region}:${AWS::AccountId}:cluster/*"
+            Version: "2012-10-17"
+          PolicyName: EMRRunJobFlowPermissions
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - "iam:PassRole"
+                Effect: Allow
+                Resource:
+                  - !GetAtt EMRClusterinstanceProfileRole.Arn
+                  - !GetAtt EMRClusterServiceRole.Arn
+              - Action:
+                  - "iam:CreateInstanceProfile"
+                  - "iam:RemoveRoleFromInstanceProfile"
+                  - "iam:DeleteInstanceProfile"
+                  - "iam:AddRoleToInstanceProfile"
+                Effect: Allow
+                Resource: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:instance-profile/SC-*"
+            Version: "2012-10-17"
+          PolicyName: IAMPermissions
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - 
+            Effect: "Allow"
+            Principal:
+              Service: 
+                - "servicecatalog.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/AWSServiceCatalogAdminFullAccess"
+        - "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/AmazonEMRFullAccessPolicy_v2"
+        - "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/AWSLambda_FullAccess"
+        - "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/AmazonOpenSearchIngestionFullAccess"
+         
+# Sets the principal who can initate provisioning from Service Studio
+#######################################################################
+  
+  SageMakerStudioEMRNoAuthProductPortfolioPrincipalAssociation:
+    Type: AWS::ServiceCatalog::PortfolioPrincipalAssociation
+    Properties:
+      PrincipalARN: !GetAtt DataSciencewithEMRSageMakerExecutionRole.Arn
+      PortfolioId: !Ref SageMakerStudioEMRNoAuthProductPortfolio
+      PrincipalType: IAM
+ 
+  SageMakerStudioPortfolioLaunchRoleConstraint:
+    Type: AWS::ServiceCatalog::LaunchRoleConstraint
+    Properties:
+      PortfolioId: !Ref SageMakerStudioEMRNoAuthProductPortfolio
+      ProductId: !Ref SageMakerStudioEMRNoAuthProduct
+      RoleArn: !GetAtt EMRNoAuthLaunchConstraint.Arn
+      Description: Role used for provisioning
+
+# EMR IAM Roles
+########################################################################
+  EMRClusterServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - elasticmapreduce.amazonaws.com
+        Version: '2012-10-17'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEMRServicePolicy_v2
+      Path: "/"
+      Policies:
+        - PolicyName:
+            Fn::Sub: AllowEMRInstnaceProfilePolicy-${AWS::StackName}
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: "iam:PassRole"
+                Resource: !GetAtt EMRClusterinstanceProfileRole.Arn
+
+  # User's Should Consider using RoleBasedAccess Control now that it is available to pass your SageMaker execution role
+  # to the cluster instead.
+  EMRClusterinstanceProfileRole:
+    Properties:
+      RoleName:
+        Fn::Sub: "${AWS::StackName}-EMRClusterinstanceProfileRole"
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - lambda.amazonaws.com
+        Version: '2012-10-17'
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonSageMakerFullAccess"
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonS3ReadOnlyAccess"
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonOpenSearchIngestionFullAccess"
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AWSLambda_FullAccess"
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/SecretsManagerReadWrite"
+      Path: "/"
+    Type: AWS::IAM::Role
+
+# Manage EMR Log and Artifacts S3 Bucket
+########################################################################
+  CopyZips:
+    Type: Custom::CopyZips
+    DependsOn: CleanUpBucketonDelete
+    Properties:
+      ServiceToken:
+        Fn::GetAtt: CopyZipsFunction.Arn
+      DestBucket:
+        Ref: S3Bucket
+      GitHubURLs:
+        - Fn::FindInMap:
+            - ClusterConfigurations
+            - emr
+            - BootStrapScriptFile
+        - Fn::FindInMap:
+            - ClusterConfigurations
+            - emr
+            - StepScriptFile
+
+  BucketManagementRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Path: "/"
+      Policies:
+        - PolicyName:
+            Fn::Sub: BucketManagementLambdaPolicy-${AWS::StackName}
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - Fn::Sub: arn:aws:s3:::${S3Bucket}/*
+
+  CopyZipsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Downloads files from GitHub and uploads them to an S3 bucket
+      Handler: index.handler
+      Runtime: python3.8
+      Role:
+        Fn::GetAtt: BucketManagementRole.Arn
+      Timeout: 900
+      Code:
+        ZipFile: |
+          import json
+          import logging
+          import threading
+          import boto3
+          import urllib.request
+          import cfnresponse
+          
+          def download_from_github_and_upload_to_s3(github_url, dest_bucket, dest_key):
+              with urllib.request.urlopen(github_url) as response:
+                  file_content = response.read()
+
+              s3 = boto3.client('s3')
+              s3.put_object(Bucket=dest_bucket, Key=dest_key, Body=file_content)
+
+          def timeout(event, context):
+              logging.error('Execution is about to time out, sending failure response to CloudFormation')
+              cfnresponse.send(event, context, cfnresponse.FAILED, {}, None)
+          
+          def handler(event, context):
+              # make sure we send a failure to CloudFormation if the function
+              # is going to timeout
+              timer = threading.Timer((context.get_remaining_time_in_millis()
+                        / 1000.00) - 0.5, timeout, args=[event, context])
+              timer.start()
+              print('Received event: %s' % json.dumps(event))
+              status = cfnresponse.SUCCESS
+              try:
+                  github_urls = event['ResourceProperties']['GitHubURLs']
+                  dest_bucket = event['ResourceProperties']['DestBucket']
+
+                  if event['RequestType'] == 'Delete':
+                      
+                      s3 = boto3.client('s3')
+                      for github_url in github_urls:
+                          s3_key = f'artifacts/emr/{github_url.split("/")[-1]}'
+                          s3.delete_object(Bucket=dest_bucket, Key=s3_key)
+
+                  else:
+                      for github_url in github_urls:
+                          dest_key = f'artifacts/emr/{github_url.split("/")[-1]}'
+                          download_from_github_and_upload_to_s3(github_url, dest_bucket, dest_key)
+                      # copy_objects(source_bucket, dest_bucket, prefix, objects)
+              except Exception as e:
+                  logging.error('Exception: %s' % e, exc_info=True)
+                  status = cfnresponse.FAILED
+              finally:
+                  timer.cancel()
+                  cfnresponse.send(event, context, status, {}, None)
+  CleanUpBucketonDelete:
+    Type: Custom::emptybucket
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+          - CleanUpBucketonDeleteLambda
+          - Arn
+      BucketName:
+        Ref: S3Bucket
+  CleanUpBucketonDeleteLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile:
+          !Sub |
+          import json, boto3, logging
+          import cfnresponse
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          
+          def lambda_handler(event, context):
+              logger.info("event: {}".format(event))
+              try:
+                  bucket = event['ResourceProperties']['BucketName']
+                  logger.info("bucket: {}, event['RequestType']: {}".format(bucket,event['RequestType']))
+                  if event['RequestType'] == 'Delete':
+                      s3 = boto3.resource('s3')
+                      bucket = s3.Bucket(bucket)
+                      for obj in bucket.objects.filter():
+                          logger.info("delete obj: {}".format(obj))
+                          s3.Object(bucket.name, obj.key).delete()
+          
+                  sendResponseCfn(event, context, cfnresponse.SUCCESS)
+              except Exception as e:
+                  logger.info("Exception: {}".format(e))
+                  sendResponseCfn(event, context, cfnresponse.FAILED)
+          
+          def sendResponseCfn(event, context, responseStatus):
+              responseData = {}
+              responseData['Data'] = {}
+              cfnresponse.send(event, context, responseStatus, responseData, "CustomResourcePhysicalID")
+      Handler: "index.lambda_handler"
+      Runtime: python3.9
+      MemorySize: 128
+      Timeout: 60
+      Role: !GetAtt BucketManagementRole.Arn
+
+# Stack Outputs
+###########################################################################
+Outputs:
+
+  SageMakerEMRDemoCloudformationEMRClusterinstanceProfileRole:
+    Description: Role for EMR Cluster's InstanceProfile
+    Value: !Ref EMRClusterinstanceProfileRole
+    Export:
+      Name: "SageMakerEMRDemoCloudformationEMRClusterinstanceProfileRole"
+
+  SageMakerEMRDemoCloudformationEMRClusterServiceRole:
+    Description: Role for EMR Cluster's Service Role
+    Value: !Ref EMRClusterServiceRole
+    Export:
+      Name: "SageMakerEMRDemoCloudformationEMRClusterServiceRole"
+
+  SageMakerEMRDemoCloudformationS3BucketName:
+    Description: Bucket Name for Amazon S3 bucket
+    Value:
+      Ref: S3Bucket
+    Export:
+      Name: "SageMakerEMRDemoCloudformationS3BucketName"
