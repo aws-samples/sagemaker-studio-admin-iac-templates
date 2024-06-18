@@ -90,6 +90,8 @@ Resources:
                   - servicecatalog:SearchProducts
                   - servicecatalog:List* 
                   - servicecatalog:Describe*"
+                  - servicecatalog:ProvisionProduct
+                  - servicecatalog:GetProvisionedProductOutputs
                   - sagemaker:ListTags 
                   - sagemaker:AddTags
                 Resource: '*'
