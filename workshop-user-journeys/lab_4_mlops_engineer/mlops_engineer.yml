@@ -1,0 +1,193 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Import an existing SageMaker Studio Domain into a new stack and apply MLops execution role permission to the domain
+
+Parameters:
+  SageMakerStudioVPCOnlyDomain:
+    Type: String
+    Description: The ID of the existing SageMaker Studio Domain to import
+
+Resources:
+  ImportedDomain:
+    Type: AWS::SageMaker::Domain
+    Properties:
+      DomainId: !Ref SageMakerStudioVPCOnlyDomain #ExistingDomainId is the ID of the existing sagemaker studio domain you want to import
+      AuthMode: IAM
+      DefaultUserSettings:
+        ExecutionRole: !GetAtt DomainExecutionRole.Arn
+      
+  DomainExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sagemaker.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: CustomSageMakerPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: #domain related permissions
+                  - 'sagemaker:CreatePresignedDomainUrl'
+                  - 'sagemaker:DescribeDomain'
+                  - 'sagemaker:DescribeUserProfile' # is this required?
+                  - 'sagemaker:UpdateDomain' # what about this?
+                  - 'sagemaker:UpdateUserProfile' # what about this? 
+                Resource:
+                  - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:domain/*'
+                  - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:user-profile/*'
+              - Effect: Allow
+                Action: #permissions requried to spin up JupyterServer and other notebook instances, model quality job definitions, monitoring schedules
+                  - 'sagemaker:CreatePresignedNotebookInstanceUrl'
+                  - 'sagemaker:DescribeNotebookInstance'
+                  - 'sagemaker:StartNotebookInstance'
+                  - 'sagemaker:StopNotebookInstance'
+                  - 'sagemaker:CreateNotebookInstanceLifecycleConfig'
+                  - 'sagemaker:DeleteNotebookInstanceLifecycleConfig'
+                  - 'sagemaker:CreateModelQualityJobDefinition'
+                  - 'sagemaker:ListModelQualityJobDefinitions'
+                  - 'sagemaker:UpdateModelQualityJobDefinition'
+                  - 'sagemaker:DeleteModelQualityJobDefinition'
+                  - 'sagemaker:CreateMonitoringSchedule'
+                  - 'sagemaker:DescribeMonitoringSchedule'
+                  - 'sagemaker:ListMonitoringSchedules'
+                  - 'sagemaker:UpdateMonitoringSchedule'
+                  - 'sagemaker:DeleteMonitoringSchedule'
+                  - 'sagemaker:CreateProject'
+                  - 'sagemaker:DescribeProject'
+                  - 'sagemaker:ListProjects'
+                  - 'sagemaker:UpdateProject'
+                  - 'sagemaker:DeleteProject'
+                  - 'sagemaker:CreateModel'
+                  - 'sagemaker:DescribeModel'
+                  - 'sagemaker:ListModels'
+                  - 'sagemaker:UpdateModel'
+                  - 'sagemaker:DeleteModel'
+                  - 'sagemaker:CreateModelPackage'
+                  - 'sagemaker:DescribeModelPackage'
+                  - 'sagemaker:ListModelPackages'
+                  - 'sagemaker:UpdateModelPackage'
+                  - 'sagemaker:DeleteModelPackage'
+                  - 'sagemaker:CreateModelPackageGroup'
+                  - 'sagemaker:DescribeModelPackageGroup'
+                  - 'sagemaker:ListModelPackageGroups'
+                  - 'sagemaker:UpdateModelPackageGroup'
+                  - 'sagemaker:DeleteModelPackageGroup'
+                Resource:
+                  - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:notebook-instance/*'
+                  - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:model-quality-job-definition/*'
+                  - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:monitoring-schedule/*'
+                  - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:project/*'
+                  - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:model/*'
+                  - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:model-package/*'
+                  - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:model-package-group/*'
+              - Effect: Allow
+                Action: #manage sagemaker apps
+                  - 'sagemaker:CreateApp'
+                  - 'sagemaker:DeleteApp'
+                  - 'sagemaker:DescribeApp'
+                  - 'sagemaker:ListApps'
+                Resource:
+                  - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:app/*'
+              - Effect: Allow
+                Action: # ECR related permissions
+                  - 'ecr:BatchGetImage'
+                  - 'ecr:GetAuthorizationToken'
+                  - 'ecr:GetDownloadUrlForLayer'
+                  - 'ecr:BatchCheckLayerAvailability'
+                  - 'ecr:ListImages'
+                  - 'ecr:DescribeRepositories'
+                Resource: '*'
+              - Effect: Allow
+                Action: # Sagemaker endpoint config commands
+                  - 'sagemaker:CreateEndpointConfig'
+                  - 'sagemaker:DescribeEndpointConfig'
+                  - 'sagemaker:ListEndpointConfigs'
+                  - 'sagemaker:DeleteEndpointConfig'
+                  - 'sagemaker:UpdateEndpointConfig'
+                Resource: 
+                  - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint-config/*'
+              - Effect: Allow
+                Action: # Sagemaker endpoint commands
+                  - 'sagemaker:CreateEndpoint'
+                  - 'sagemaker:DescribeEndpoint'
+                  - 'sagemaker:ListEndpoints'
+                  - 'sagemaker:DeleteEndpoint'
+                  - 'sagemaker:UpdateEndpoint'
+                Resource: 
+                  - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint-config/*'
+              - Effect: Allow
+                Action: # View and list experiments
+                  - 'sagemaker:ListExperiments'
+                  - 'sagemaker:DescribeExperiment'
+                  - 'sagemaker:ListTrials'
+                  - 'sagemaker:DescribeTrial'
+                  - 'sagemaker:ListTrialComponents'
+                  - 'sagemaker:DescribeTrialComponent'
+                Resource: '*'
+              - Effect: Allow
+                Action: # Sagemaker pipelines (***need to review IAM pass role***)
+                   - 'sagemaker:CreatePipeline'
+                   - 'sagemaker:DescribePipeline'
+                   - 'sagemaker:ListPipelines'
+                   - 'sagemaker:UpdatePipeline'
+                   - 'sagemaker:DeletePipeline'
+                   - 'sagemaker:StartPipelineExecution'
+                   - 'sagemaker:DescribePipelineExecution'
+                   - 'sagemaker:ListPipelineExecutions'
+                   - 'sagemaker:StopPipelineExecution'
+                   - 'sagemaker:CreatePipelineDefinitionForPath'
+                   - 'sagemaker:DescribePipelineDefinitionForPath'
+                   - 'sagemaker:ListPipelineDefinitionForPaths'
+                Resource:
+                - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:pipeline/*'
+                - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:pipeline-execution/*'
+                - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:pipeline-definition/*'
+              - Effect: Allow
+                Action: # cloud watch logs
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:DescribeLogStreams'
+                  - 'logs:GetLogEvents'
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/sagemaker/*'
+              - Effect: Allow
+                Action: # cloud watch and events
+                  - 'events:PutRule'
+                  - 'events:DescribeRule'
+                  - 'events:PutTargets'
+                  - 'events:RemoveTargets'
+                  - 'events:DeleteRule'
+                Resource:
+                  - !Sub 'arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/SageMaker*'
+              - Effect: Allow
+                Action: # S3 Accesss
+                  - 's3:ListBucket'
+                  - 's3:GetBucketLocation'
+                  - 's3:GetBucketPolicy'
+                  - 's3:PutBucketPolicy'
+                  - 's3:DeleteBucket'
+                Resource:
+                  - 'arn:aws:s3:::*SageMaker*'
+                  - 'arn:aws:s3:::*Sagemaker*'
+                  - 'arn:aws:s3:::*sagemaker*'
+              - Effect: Allow
+                Action: # S3 Access
+                  - 's3:CreateBucket'
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                  - 's3:DeleteObject'
+                Resource:
+                  - 'arn:aws:s3:::*SageMaker*/*'
+                  - 'arn:aws:s3:::*Sagemaker*/*'
+                  - 'arn:aws:s3:::*sagemaker*/*'
+
+Outputs:
+  ImportedDomainId:
+    Description: The ID of the imported SageMaker Studio Domain
+    Value: !Ref ImportedDomain
