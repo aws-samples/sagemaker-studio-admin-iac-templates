@@ -166,7 +166,14 @@ resource "aws_iam_role" "data_science_sage_maker_execution_role" {
               "sagemaker:UpdateFeatureGroup",
               "sagemaker:UpdateFeatureMetadata",
               "sagemaker:CreateFeatureGroup",
-              "sagemaker:PutRecord"
+              "sagemaker:PutRecord",
+              "sagemaker-mlflow:*",
+              "sagemaker:CreateMlflowTrackingServer",
+              "sagemaker:UpdateMlflowTrackingServer",
+              "sagemaker:DeleteMlflowTrackingServer",
+              "sagemaker:StartMlflowTrackingServer",
+              "sagemaker:StopMlflowTrackingServer",
+              "sagemaker:CreatePresignedMlflowTrackingServerUrl"
             ]
             Resource = "arn:aws:sagemaker:*:*:*/*"
           }
@@ -212,6 +219,27 @@ resource "aws_iam_role" "data_science_sage_maker_execution_role" {
               "sagemaker:GetSearchSuggestions"
             ]
             Resource = "*"
+          }
+        ]
+      }
+    },
+    {
+      PolicyName = "sagemaker-mlflow"
+      PolicyDocument = {
+        Version = "2012-10-17"
+        Statement = [
+          {
+            Effect = "Allow"
+            Action = [
+              "sagemaker-mlflow:*",
+              "sagemaker:CreateMlflowTrackingServer",
+              "sagemaker:UpdateMlflowTrackingServer",
+              "sagemaker:DeleteMlflowTrackingServer",
+              "sagemaker:StartMlflowTrackingServer",
+              "sagemaker:StopMlflowTrackingServer",
+              "sagemaker:CreatePresignedMlflowTrackingServerUrl"
+            ]
+            Resource = "arn:aws:sagemaker:*:*:mlflow-tracking-server/*"
           }
         ]
       }

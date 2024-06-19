@@ -198,6 +198,20 @@ Resources:
                   - sagemaker:Search
                   - sagemaker:GetSearchSuggestions
                 Resource: "*"
+        - PolicyName: sagemaker-mlflow
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sagemaker-mlflow:*
+                  - sagemaker:CreateMlflowTrackingServer
+                  - sagemaker:UpdateMlflowTrackingServer
+                  - sagemaker:DeleteMlflowTrackingServer
+                  - sagemaker:StartMlflowTrackingServer
+                  - sagemaker:StopMlflowTrackingServer
+                  - sagemaker:CreatePresignedMlflowTrackingServerUrl
+                Resource: arn:aws:sagemaker:*:*:mlflow-tracking-server/*
         - PolicyName: sagemaker-model-management
           PolicyDocument:
             Version: 2012-10-17
