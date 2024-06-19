@@ -96,6 +96,7 @@ Resources:
                   - sagemaker:ListCandidatesForAutoMLJob
                   - sagemaker:ListHyperParameterTuningJobs
                   - sagemaker:ListTrainingJobsForHyperParameterTuningJob
+                  - sagemaker:ListFeatureGroups
                 Resource: "*"
         - PolicyName: sagemaker-experiments-management
           PolicyDocument:
@@ -125,6 +126,11 @@ Resources:
                   - sagemaker:DeleteExperiment
                   - sagemaker:DeleteTrial
                   - sagemaker:DeleteTrialComponent
+                  - sagemaker:DeleteFeatureGroup
+                  - sagemaker:UpdateFeatureGroup
+                  - sagemaker:UpdateFeatureMetadata
+                  - sagemaker:CreateFeatureGroup
+                  - sagemaker:PutRecord
                 Resource: arn:aws:sagemaker:*:*:*/*
         - PolicyName: sagemaker-experiments-visualization
           PolicyDocument:
@@ -139,6 +145,10 @@ Resources:
                   - sagemaker:DescribeTrial
                   - sagemaker:DescribeTrialComponent
                   - sagemaker:DescribeLineageGroup
+                  - sagemaker:DescribeFeatureGroup
+                  - sagemaker:DescribeFeatureMetadata
+                  - sagemaker:GetRecord
+                  - sagemaker:BatchGetRecord
                 Resource: arn:aws:sagemaker:*:*:*/*
               - Effect: Allow
                 Action:
@@ -359,6 +369,36 @@ Resources:
                   - logs:PutResourcePolicy
                   - logs:UpdateLogDelivery
                 Resource: "*"
+        - PolicyName: glue-management-actions
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - glue:GetTable
+                  - glue:UpdateTable
+                  - glue:GetDatabase
+                  - glue:CreateDatabase
+                  - glue:CreateTable
+                Resource: 
+                  - "arn:aws:glue:*:*:catalog"
+                  - "arn:aws:glue:*:*:database/*"
+                  - "arn:aws:glue:*:*:table/*/*"
+        - PolicyName: kms-management-actions
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kms:CreateGrant
+                  - kms:Decrypt
+                  - kms:DescribeKey
+                  - kms:Encrypt
+                  - kms:GenerateDataKey*
+                  - kms:ReEncrypt*
+                  - kms:ListKeys
+                  - kms:DescribeKey
+                Resource: !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*"
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -374,6 +414,8 @@ Resources:
                 - bedrock.amazonaws.com
             Action:
               - sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub "arn:aws:iam::aws:policy/AmazonSageMakerFeatureStoreAccess"
 
   DataScienceUserProfile:
     Type: AWS::SageMaker::UserProfile

@@ -124,7 +124,8 @@ resource "aws_iam_role" "data_science_sage_maker_execution_role" {
               "sagemaker:ListAutoMLJobs",
               "sagemaker:ListCandidatesForAutoMLJob",
               "sagemaker:ListHyperParameterTuningJobs",
-              "sagemaker:ListTrainingJobsForHyperParameterTuningJob"
+              "sagemaker:ListTrainingJobsForHyperParameterTuningJob",
+              "sagemaker:ListFeatureGroups"
             ]
             Resource = "*"
           }
@@ -160,7 +161,12 @@ resource "aws_iam_role" "data_science_sage_maker_execution_role" {
               "sagemaker:DeleteContext",
               "sagemaker:DeleteExperiment",
               "sagemaker:DeleteTrial",
-              "sagemaker:DeleteTrialComponent"
+              "sagemaker:DeleteTrialComponent",
+              "sagemaker:DeleteFeatureGroup",
+              "sagemaker:UpdateFeatureGroup",
+              "sagemaker:UpdateFeatureMetadata",
+              "sagemaker:CreateFeatureGroup",
+              "sagemaker:PutRecord"
             ]
             Resource = "arn:aws:sagemaker:*:*:*/*"
           }
@@ -181,7 +187,11 @@ resource "aws_iam_role" "data_science_sage_maker_execution_role" {
               "sagemaker:DescribeExperiment",
               "sagemaker:DescribeTrial",
               "sagemaker:DescribeTrialComponent",
-              "sagemaker:DescribeLineageGroup"
+              "sagemaker:DescribeLineageGroup",
+              "sagemaker:DescribeFeatureGroup",
+              "sagemaker:DescribeFeatureMetadata",
+              "sagemaker:GetRecord",
+              "sagemaker:BatchGetRecord"
             ]
             Resource = "arn:aws:sagemaker:*:*:*/*"
           },
@@ -432,6 +442,51 @@ resource "aws_iam_role" "data_science_sage_maker_execution_role" {
           }
         ]
       }
+    },
+    {
+      PolicyName = "glue-management-actions"
+      PolicyDocument = {
+        Version = "2012-10-17"
+        Statement = [
+          {
+            Effect = "Allow"
+            Action = [
+              "glue:GetTable",
+              "glue:UpdateTable",
+              "glue:GetDatabase",
+              "glue:CreateDatabase",
+              "glue:CreateTable"
+            ]
+            Resource = [
+              "arn:aws:glue:*:*:catalog",
+              "arn:aws:glue:*:*:database/*",
+              "arn:aws:glue:*:*:table/*/*"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      PolicyName = "kms-management-actions"
+      PolicyDocument = {
+        Version = "2012-10-17"
+        Statement = [
+          {
+            Effect = "Allow"
+            Action = [
+              "kms:CreateGrant",
+              "kms:Decrypt",
+              "kms:DescribeKey",
+              "kms:Encrypt",
+              "kms:GenerateDataKey*",
+              "kms:ReEncrypt*",
+              "kms:ListKeys",
+              "kms:DescribeKey"
+            ]
+            Resource = "arn:aws:kms:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:key/*"
+          }
+        ]
+      }
     }
   ]
   assume_role_policy = {
@@ -461,6 +516,9 @@ resource "aws_iam_role" "data_science_sage_maker_execution_role" {
       }
     ]
   }
+  managed_policy_arns = [
+    "arn:aws:iam::aws:policy/AmazonSageMakerFeatureStoreAccess"
+  ]
 }
 
 resource "aws_sagemaker_user_profile" "data_science_user_profile" {
