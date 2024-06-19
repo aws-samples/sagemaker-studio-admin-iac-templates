@@ -1,6 +1,6 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: This CloudFormation template provisions an AWS SageMaker Studio environment integrated with Amazon EMR. It sets up an S3 bucket for storage, defines an IAM role with policies to manage access and operations between SageMaker and EMR, and configures SageMaker user profiles for data scientists. The template also creates a service catalog product to facilitate easy provisioning of SageMaker Studio and EMR clusters, including the necessary roles and permissions for seamless interaction. Custom Lambda functions are utilized to manage the initialization scripts from GitHub and ensure proper cleanup of resources during stack deletion."
+Description: "This CloudFormation template sets up an AWS SageMaker Studio environment integrated with Amazon EMR, including an S3 bucket for storage and an IAM role with policies to facilitate secure operations between SageMaker and EMR. It provisions SageMaker user profiles for data scientists and includes a service catalog product to simplify the provisioning of SageMaker Studio and EMR clusters. Custom Lambda functions manage initialization scripts from GitHub and ensure resource cleanup during stack deletion. Additionally, the template includes configurations for user permissions, roles, and policies to enable seamless interaction between various AWS services."
 
 Mappings:
   ClusterConfigurations:
