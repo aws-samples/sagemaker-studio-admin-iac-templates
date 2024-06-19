@@ -7,6 +7,35 @@ Parameters:
     Description: The name of the new UserProfile
     Default: data-science
 
+  SageMakerStudioDomainId:
+    Type: String
+    Default: ''
+    Description: (Optional) The ID of the SageMaker Studio Domain. If not provided, the value will be imported from lab_0 stack
+
+  SageMakerStudioSecurityGroups:
+    Type: CommaDelimitedList
+    Default: ''
+    Description: (Optional) The list of Security Group IDs for the SageMaker Studio Domain. If not provided, the value will be imported from lab_0 stack
+
+  SageMakerStudioSubnetIds:
+    Type: CommaDelimitedList
+    Default: ''
+    Description: (Optional) The list of Subnet IDs for the SageMaker Studio Domain. If not provided, the value will be imported from lab_0 stack
+
+Conditions:
+  SageMakerStudioDomainIdProvidedCondition: !Not
+    - !Equals
+      - !Ref SageMakerStudioDomainId
+      - ''
+  SageMakerStudioSecurityGroupsCondition: !Not
+    - !Equals
+      - !Join ['', !Ref SageMakerStudioSecurityGroups]
+      - ''
+  SageMakerStudioSubnetIdsCondition: !Not
+    - !Equals
+      - !Join ['', !Ref SageMakerStudioSubnetIds]
+      - ''
+
 Resources:
   DataScienceSageMakerExecutionRole:
     Type: AWS::IAM::Role
@@ -66,10 +95,14 @@ Resources:
                 Resource: arn:aws:sagemaker:*:*:*/*
                 Condition:
                   ForAllValues:StringEquals:
-                    "sagemaker:VpcSecurityGroupIds":
+                    "sagemaker:VpcSecurityGroupIds": !If
+                      - SageMakerStudioSecurityGroupsCondition
+                      - !Ref SageMakerStudioSecurityGroups
                       - !ImportValue SageMakerCloudformationSecurityGroup
-                    "sagemaker:VpcSubnets":
-                      - !ImportValue SageMakerCloudformationSubnetId
+                    "sagemaker:VpcSubnets": !If
+                      - SageMakerStudioSubnetIdsCondition
+                      - !Ref SageMakerStudioSubnetIds
+                      - !ImportValue SageMakerCloudformationSecurityGroup
                   "Null":
                     "sagemaker:VpcSubnets": false
                     "sagemaker:VpcSecurityGroupIds": false
@@ -420,7 +453,10 @@ Resources:
   DataScienceUserProfile:
     Type: AWS::SageMaker::UserProfile
     Properties:
-      DomainId: !ImportValue SageMakerDomainId
+      DomainId: !If
+        - SageMakerStudioDomainIdProvidedCondition
+        - !Ref SageMakerStudioDomainId
+        - !ImportValue SageMakerDomainId
       UserProfileName: !Ref DataScienceUserProfileName
       UserSettings:
         ExecutionRole: !GetAtt DataScienceSageMakerExecutionRole.Arn
