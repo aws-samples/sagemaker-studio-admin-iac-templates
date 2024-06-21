@@ -530,17 +530,6 @@ resource "aws_iam_role" "data_science_sage_maker_execution_role" {
         Action = [
           "sts:AssumeRole"
         ]
-      },
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = [
-            "bedrock.amazonaws.com"
-          ]
-        }
-        Action = [
-          "sts:AssumeRole"
-        ]
       }
     ]
   }

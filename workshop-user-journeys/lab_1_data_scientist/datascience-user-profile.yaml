@@ -455,12 +455,6 @@ Resources:
                 - sagemaker.amazonaws.com
             Action:
               - sts:AssumeRole
-          - Effect: Allow
-            Principal:
-              Service:
-                - bedrock.amazonaws.com
-            Action:
-              - sts:AssumeRole
       ManagedPolicyArns:
         - !Sub "arn:aws:iam::aws:policy/AmazonSageMakerFeatureStoreAccess"
 
