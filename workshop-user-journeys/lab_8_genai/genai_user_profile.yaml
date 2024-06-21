@@ -138,6 +138,11 @@ Resources:
                 Action:
                   - sagemaker:InvokeEndpoint
                 Resource: !Sub "arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/*"
+              -
+                Effect: Allow
+                Action:
+                  - sagemaker:InvokeEndpoint
+                Resource: !Sub "arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:inference-component/*"
         - PolicyName: sagemaker-experiments-management
           PolicyDocument:
             Version: 2012-10-17

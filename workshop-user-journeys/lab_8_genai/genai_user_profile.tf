@@ -177,6 +177,13 @@ resource "aws_iam_role" "gen_ai_sage_maker_execution_role" {
               "sagemaker:InvokeEndpoint"
             ]
             Resource = "arn:aws:sagemaker:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:endpoint/*"
+          },
+          {
+            Effect = "Allow"
+            Action = [
+              "sagemaker:InvokeEndpoint"
+            ]
+            Resource = "arn:aws:sagemaker:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:inference-component/*"
           }
         ]
       }
