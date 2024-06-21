@@ -155,6 +155,13 @@ resource "aws_iam_role" "gen_ai_sage_maker_execution_role" {
               "sagemaker:ListInferenceComponents"
             ]
             Resource = "*"
+          },
+          {
+            Effect = "Allow"
+            Action = [
+              "sagemaker:ListTags"
+            ]
+            Resource = "arn:aws:sagemaker:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*/*"
           }
         ]
       }

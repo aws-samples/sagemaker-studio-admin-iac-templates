@@ -124,6 +124,11 @@ Resources:
                   - sagemaker:ListEndpointConfigs
                   - sagemaker:ListInferenceComponents
                 Resource: "*"
+              -
+                Effect: Allow
+                Action:
+                  - sagemaker:ListTags
+                Resource: !Sub "arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:*/*"
         - PolicyName: sagemaker-experiments-management
           PolicyDocument:
             Version: 2012-10-17
