@@ -167,6 +167,21 @@ resource "aws_iam_role" "gen_ai_sage_maker_execution_role" {
       }
     },
     {
+      PolicyName = "sagemaker-invoke-endpoint"
+      PolicyDocument = {
+        Version = "2012-10-17"
+        Statement = [
+          {
+            Effect = "Allow"
+            Action = [
+              "sagemaker:InvokeEndpoint"
+            ]
+            Resource = "arn:aws:sagemaker:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:endpoint/*"
+          }
+        ]
+      }
+    },
+    {
       PolicyName = "sagemaker-experiments-management"
       PolicyDocument = {
         Version = "2012-10-17"

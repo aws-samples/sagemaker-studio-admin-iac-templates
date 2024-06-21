@@ -129,6 +129,15 @@ Resources:
                 Action:
                   - sagemaker:ListTags
                 Resource: !Sub "arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:*/*"
+        - PolicyName: sagemaker-invoke-endpoint
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - sagemaker:InvokeEndpoint
+                Resource: !Sub "arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/*"
         - PolicyName: sagemaker-experiments-management
           PolicyDocument:
             Version: 2012-10-17
