@@ -61,7 +61,7 @@ resource "aws_vpc" "vpc" {
   enable_dns_support = true
   enable_dns_hostnames = true
   tags = {
-    for-use-with-amazon-sagemaker = "true"
+    for-use-with-amazon-emr-managed-policies = "true"
     Name = "${local.stack_name}-VPC"
   }
 }
@@ -92,7 +92,7 @@ resource "aws_subnet" "private_subnet1" {
   cidr_block = local.mappings["VpcConfigurations"]["cidr"]["PrivateSubnet1"]
   map_public_ip_on_launch = false
   tags = {
-    for-use-with-amazon-sagemaker = "true"
+    for-use-with-amazon-emr-managed-policies = "true"
     Name = "${local.stack_name} Private Subnet (AZ1)"
   }
 }
@@ -113,10 +113,10 @@ resource "aws_route_table" "public_route_table" {
   }
 }
 
-resource "aws_route" "default_public_route" {
-  route_table_id = aws_route_table.public_route_table.id
-  destination_cidr_block = "0.0.0.0/0"
-  gateway_id = aws_internet_gateway.internet_gateway.id
+resource "aws_route53_record" "default_public_route" {
+  zone_id = aws_route_table.public_route_table.id
+  // CF Property(DestinationCidrBlock) = "0.0.0.0/0"
+  health_check_id = aws_internet_gateway.internet_gateway.id
 }
 
 resource "aws_vpc_endpoint_route_table_association" "public_subnet1_route_table_association" {
@@ -134,10 +134,9 @@ resource "aws_vpc_endpoint_route_table_association" "private_subnet1_route_table
   route_table_id = aws_subnet.private_subnet1.id
 }
 
-resource "aws_route" "private_subnet1_internet_route" {
-  route_table_id = aws_route_table.private_route_table1.id
-  destination_cidr_block = "0.0.0.0/0"
-  nat_gateway_id = aws_nat_gateway.nat_gateway1.association_id
+resource "aws_route53_record" "private_subnet1_internet_route" {
+  zone_id = aws_nat_gateway.nat_gateway1.association_id
+  // CF Property(DestinationCidrBlock) = "0.0.0.0/0"
 }
 
 resource "aws_vpc_endpoint" "s3_endpoint" {
