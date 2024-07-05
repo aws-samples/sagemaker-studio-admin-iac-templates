@@ -1,11 +1,6 @@
-// Cloning Terraform src code to /var/folders/1d/p7dclqcx4934dybvv117p3640000gr/T/terraform_src...
- code has been checked out.
+// Existing Terraform src code found at /var/folders/qq/vvmdnyds661b9cbqfn0jkzh00000gr/T/terraform_src.
 
 variable "SageMakerDomainId" {
-  description = "This variable was an imported value in the Cloudformation Template."
-}
-
-variable "SageMakerCloudformationSubnetId" {
   description = "This variable was an imported value in the Cloudformation Template."
 }
 
@@ -17,14 +12,14 @@ data "aws_caller_identity" "current" {}
 
 data "aws_region" "current" {}
 
-variable data_science_user_profile_name {
+variable sage_maker_gen_ai_user_profile_name {
   description = "The name of the new UserProfile"
   type = string
-  default = "data-science"
+  default = "genai"
 }
 
-resource "aws_iam_role" "data_science_sage_maker_execution_role" {
-  name = "AmazonSageMakerExecutionRole-${var.data_science_user_profile_name}-${data.aws_region.current.name}"
+resource "aws_iam_role" "gen_ai_sage_maker_execution_role" {
+  name = "AmazonSageMakerExecutionRole-${var.sage_maker_gen_ai_user_profile_name}-${data.aws_region.current.name}"
   force_detach_policies = [
     {
       PolicyName = "iam-pass-role"
@@ -37,8 +32,8 @@ resource "aws_iam_role" "data_science_sage_maker_execution_role" {
               "iam:PassRole"
             ]
             Resource = [
-              join("", ["arn:aws:iam::", data.aws_caller_identity.current.account_id, ":role/service-role/AmazonSageMakerExecutionRole-", var.data_science_user_profile_name, "-", data.aws_region.current.name]),
-              join("", ["arn:aws:iam::", data.aws_caller_identity.current.account_id, ":role/AmazonSageMakerExecutionRole-", var.data_science_user_profile_name, "-", data.aws_region.current.name])
+              join("", ["arn:aws:iam::", data.aws_caller_identity.current.account_id, ":role/service-role/AmazonSageMakerExecutionRole-", var.sage_maker_gen_ai_user_profile_name, "-", data.aws_region.current.name]),
+              join("", ["arn:aws:iam::", data.aws_caller_identity.current.account_id, ":role/AmazonSageMakerExecutionRole-", var.sage_maker_gen_ai_user_profile_name, "-", data.aws_region.current.name])
             ]
             Condition = {
               StringEquals = {
@@ -85,12 +80,8 @@ resource "aws_iam_role" "data_science_sage_maker_execution_role" {
             Resource = "arn:aws:sagemaker:*:*:*/*"
             Condition = {
               ForAllValues:StringEquals = {
-                sagemaker:VpcSecurityGroupIds = [
-                  var.SageMakerCloudformationSecurityGroup
-                ]
-                sagemaker:VpcSubnets = [
-                  var.SageMakerCloudformationSubnetId
-                ]
+                sagemaker:VpcSecurityGroupIds = var.SageMakerCloudformationSecurityGroup
+                sagemaker:VpcSubnets = var.SageMakerCloudformationSecurityGroup
               }
               Null = {
                 sagemaker:VpcSubnets = false
@@ -133,6 +124,71 @@ resource "aws_iam_role" "data_science_sage_maker_execution_role" {
       }
     },
     {
+      PolicyName = "sagemaker-endpoint-deployment"
+      PolicyDocument = {
+        Version = "2012-10-17"
+        Statement = [
+          {
+            Effect = "Allow"
+            Action = [
+              "sagemaker:CreateEndpointConfig",
+              "sagemaker:CreateEndpoint",
+              "sagemaker:DeleteEndpointConfig",
+              "sagemaker:DeleteEndpoint",
+              "sagemaker:UpdateEndpoint",
+              "sagemaker:UpdateEndpointWeightsAndCapacities",
+              "sagemaker:DescribeEndpoint",
+              "sagemaker:DescribeEndpointConfig",
+              "sagemaker:CreateInferenceComponent",
+              "sagemaker:DeleteInferenceComponent",
+              "sagemaker:DescribeInferenceComponent",
+              "sagemaker:UpdateInferenceComponent",
+              "sagemaker:UpdateInferenceComponentRuntimeConfig"
+            ]
+            Resource = "arn:aws:sagemaker:*:*:*/*"
+          },
+          {
+            Effect = "Allow"
+            Action = [
+              "sagemaker:ListEndpoints",
+              "sagemaker:ListEndpointConfigs",
+              "sagemaker:ListInferenceComponents"
+            ]
+            Resource = "*"
+          },
+          {
+            Effect = "Allow"
+            Action = [
+              "sagemaker:ListTags"
+            ]
+            Resource = "arn:aws:sagemaker:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*/*"
+          }
+        ]
+      }
+    },
+    {
+      PolicyName = "sagemaker-invoke-endpoint"
+      PolicyDocument = {
+        Version = "2012-10-17"
+        Statement = [
+          {
+            Effect = "Allow"
+            Action = [
+              "sagemaker:InvokeEndpoint"
+            ]
+            Resource = "arn:aws:sagemaker:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:endpoint/*"
+          },
+          {
+            Effect = "Allow"
+            Action = [
+              "sagemaker:InvokeEndpoint"
+            ]
+            Resource = "arn:aws:sagemaker:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:inference-component/*"
+          }
+        ]
+      }
+    },
+    {
       PolicyName = "sagemaker-experiments-management"
       PolicyDocument = {
         Version = "2012-10-17"
@@ -166,14 +222,7 @@ resource "aws_iam_role" "data_science_sage_maker_execution_role" {
               "sagemaker:UpdateFeatureGroup",
               "sagemaker:UpdateFeatureMetadata",
               "sagemaker:CreateFeatureGroup",
-              "sagemaker:PutRecord",
-              "sagemaker-mlflow:*",
-              "sagemaker:CreateMlflowTrackingServer",
-              "sagemaker:UpdateMlflowTrackingServer",
-              "sagemaker:DeleteMlflowTrackingServer",
-              "sagemaker:StartMlflowTrackingServer",
-              "sagemaker:StopMlflowTrackingServer",
-              "sagemaker:CreatePresignedMlflowTrackingServerUrl"
+              "sagemaker:PutRecord"
             ]
             Resource = "arn:aws:sagemaker:*:*:*/*"
           }
@@ -530,23 +579,35 @@ resource "aws_iam_role" "data_science_sage_maker_execution_role" {
         Action = [
           "sts:AssumeRole"
         ]
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = [
+            "bedrock.amazonaws.com"
+          ]
+        }
+        Action = [
+          "sts:AssumeRole"
+        ]
       }
     ]
   }
   managed_policy_arns = [
-    "arn:aws:iam::aws:policy/AmazonSageMakerFeatureStoreAccess"
+    "arn:aws:iam::aws:policy/AmazonSageMakerFeatureStoreAccess",
+    "arn:aws:iam::aws:policy/AmazonBedrockReadOnly"
   ]
 }
 
-resource "aws_sagemaker_user_profile" "data_science_user_profile" {
+resource "aws_sagemaker_user_profile" "sage_maker_gen_ai_user_profile" {
   domain_id = var.SageMakerDomainId
-  user_profile_name = var.data_science_user_profile_name
+  user_profile_name = var.sage_maker_gen_ai_user_profile_name
   user_settings {
-    execution_role = aws_iam_role.data_science_sage_maker_execution_role.arn
+    execution_role = aws_iam_role.gen_ai_sage_maker_execution_role.arn
   }
 }
 
-output "data_science_user_profile_arn" {
+output "sage_maker_gen_ai_user_profile_arn" {
   description = "The ARN of the new User Profile"
-  value = aws_sagemaker_user_profile.data_science_user_profile.arn
+  value = aws_sagemaker_user_profile.sage_maker_gen_ai_user_profile.arn
 }

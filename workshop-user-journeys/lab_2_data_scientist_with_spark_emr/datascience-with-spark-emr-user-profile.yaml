@@ -1,6 +1,6 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: This CloudFormation template provisions an AWS SageMaker Studio environment integrated with Amazon EMR. It sets up an S3 bucket for storage, defines an IAM role with policies to manage access and operations between SageMaker and EMR, and configures SageMaker user profiles for data scientists. The template also creates a service catalog product to facilitate easy provisioning of SageMaker Studio and EMR clusters, including the necessary roles and permissions for seamless interaction. Custom Lambda functions are utilized to manage the initialization scripts from GitHub and ensure proper cleanup of resources during stack deletion."
+Description: "This CloudFormation template sets up an AWS SageMaker Studio environment integrated with Amazon EMR, including an S3 bucket for storage and an IAM role with policies to facilitate secure operations between SageMaker and EMR. It provisions SageMaker user profiles for data scientists and includes a service catalog product to simplify the provisioning of SageMaker Studio and EMR clusters. Custom Lambda functions manage initialization scripts from GitHub and ensure resource cleanup during stack deletion. Additionally, the template includes configurations for user permissions, roles, and policies to enable seamless interaction between various AWS services."
 
 Mappings:
   ClusterConfigurations:
@@ -14,6 +14,11 @@ Parameters:
     Type: String
     Description: SageMaker Studio User Profile Name
     Default: data-scientist-with-emr
+  
+  EMRTemplateURL:
+    Type: String
+    Description: SageMaker EMR Service Catalog URL
+    Default: https://raw.githubusercontent.com/aws-samples/sagemaker-studio-admin-iac-templates/workshop-v1/workshop-user-journeys/lab_2_data_scientist_with_spark_emr/service-catalog-portfolio/EMRonEC2ServiceCatalogTemplate.yaml
 
 
 Resources:
@@ -89,7 +94,7 @@ Resources:
                   - elasticmapreduce:ListClusters
                   - servicecatalog:SearchProducts
                   - servicecatalog:List* 
-                  - servicecatalog:Describe*"
+                  - servicecatalog:Describe*
                   - servicecatalog:ProvisionProduct
                   - servicecatalog:GetProvisionedProductOutputs
                   - sagemaker:ListTags 
@@ -445,7 +450,7 @@ Resources:
         - Name: SageMaker Studio Domain No Auth EMR
           Description: Provisions a SageMaker domain and No Auth EMR Cluster
           Info:
-            LoadTemplateFromURL: https://raw.githubusercontent.com/pranavvm26/sagemaker-studio-emr/main/cloudformation/getting_started/CFN-EMR-NoStudioNoAuthTemplate-v4.yaml
+            LoadTemplateFromURL: !Ref EMRTemplateURL
       Tags:
         - Key: "sagemaker:studio-visibility:emr"
           Value: "true"
@@ -543,8 +548,6 @@ Resources:
       ManagedPolicyArns:
         - "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/AWSServiceCatalogAdminFullAccess"
         - "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/AmazonEMRFullAccessPolicy_v2"
-        - "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/AWSLambda_FullAccess"
-        - "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/AmazonOpenSearchIngestionFullAccess"
          
 # Sets the principal who can initate provisioning from Service Studio
 #######################################################################
@@ -582,8 +585,8 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AmazonEMRServicePolicy_v2
       Path: "/"
       Policies:
-        - PolicyName:
-            Fn::Sub: AllowEMRInstnaceProfilePolicy-${AWS::StackName}
+        - PolicyName: 
+            Fn::Sub: EMRInstProfilePolicy-${AWS::StackName}
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -594,9 +597,10 @@ Resources:
   # User's Should Consider using RoleBasedAccess Control now that it is available to pass your SageMaker execution role
   # to the cluster instead.
   EMRClusterinstanceProfileRole:
+    Type: AWS::IAM::Role
     Properties:
       RoleName:
-        Fn::Sub: "${AWS::StackName}-EMRClusterinstanceProfileRole"
+        Fn::Sub: "EMRClustInstProfileRole-${AWS::StackName}"
       AssumeRolePolicyDocument:
         Statement:
           - Action:
@@ -605,16 +609,18 @@ Resources:
             Principal:
               Service:
                 - ec2.amazonaws.com
-                - lambda.amazonaws.com
         Version: '2012-10-17'
       ManagedPolicyArns:
-        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonSageMakerFullAccess"
         - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonS3ReadOnlyAccess"
-        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonOpenSearchIngestionFullAccess"
-        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AWSLambda_FullAccess"
-        - !Sub "arn:${AWS::Partition}:iam::aws:policy/SecretsManagerReadWrite"
+      Policies:
+        - PolicyName: "DataScienceRoleInherited"
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: "iam:PassRole"
+                Resource: !GetAtt DataSciencewithEMRSageMakerExecutionRole.Arn
       Path: "/"
-    Type: AWS::IAM::Role
 
 # Manage EMR Log and Artifacts S3 Bucket
 ########################################################################
@@ -671,7 +677,7 @@ Resources:
     Properties:
       Description: Downloads files from GitHub and uploads them to an S3 bucket
       Handler: index.handler
-      Runtime: python3.8
+      Runtime: python3.10
       Role:
         Fn::GetAtt: BucketManagementRole.Arn
       Timeout: 900
@@ -767,7 +773,7 @@ Resources:
               responseData['Data'] = {}
               cfnresponse.send(event, context, responseStatus, responseData, "CustomResourcePhysicalID")
       Handler: "index.lambda_handler"
-      Runtime: python3.9
+      Runtime: python3.10
       MemorySize: 128
       Timeout: 60
       Role: !GetAtt BucketManagementRole.Arn

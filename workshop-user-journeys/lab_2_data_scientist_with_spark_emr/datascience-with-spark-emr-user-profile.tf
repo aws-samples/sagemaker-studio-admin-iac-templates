@@ -37,6 +37,12 @@ variable data_science_user_profile_name {
   default = "data-scientist-with-emr"
 }
 
+variable emr_template_url {
+  description = "SageMaker EMR Service Catalog URL"
+  type = string
+  default = "https://raw.githubusercontent.com/aws-samples/sagemaker-studio-admin-iac-templates/workshop-v1/workshop-user-journeys/lab_2_data_scientist_with_spark_emr/service-catalog-portfolio/EMRonEC2ServiceCatalogTemplate.yaml"
+}
+
 resource "aws_s3_bucket" "s3_bucket" {
   bucket = join("-", ["sagemaker-emr-template-cfn", element(split(""/"", local.stack_id), 2)])
 }
@@ -114,7 +120,9 @@ resource "aws_iam_role" "data_sciencewith_emr_sage_maker_execution_role" {
               "elasticmapreduce:ListClusters",
               "servicecatalog:SearchProducts",
               "servicecatalog:List*",
-              "servicecatalog:Describe*"",
+              "servicecatalog:Describe*",
+              "servicecatalog:ProvisionProduct",
+              "servicecatalog:GetProvisionedProductOutputs",
               "sagemaker:ListTags",
               "sagemaker:AddTags"
             ]
@@ -543,7 +551,7 @@ resource "aws_cloudsearch_domain_service_access_policy" "sage_maker_studio_emr_n
   //     Name = "SageMaker Studio Domain No Auth EMR"
   //     Description = "Provisions a SageMaker domain and No Auth EMR Cluster"
   //     Info = {
-  //       LoadTemplateFromURL = "https://raw.githubusercontent.com/pranavvm26/sagemaker-studio-emr/main/cloudformation/getting_started/CFN-EMR-NoStudioNoAuthTemplate-v4.yaml"
+  //       LoadTemplateFromURL = var.emr_template_url
   //     }
   //   }
   // ]
@@ -692,9 +700,7 @@ resource "aws_iam_role" "emr_no_auth_launch_constraint" {
   }
   managed_policy_arns = [
     "arn:${data.aws_partition.current.partition}:iam::aws:policy/AWSServiceCatalogAdminFullAccess",
-    "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonEMRFullAccessPolicy_v2",
-    "arn:${data.aws_partition.current.partition}:iam::aws:policy/AWSLambda_FullAccess",
-    "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonOpenSearchIngestionFullAccess"
+    "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonEMRFullAccessPolicy_v2"
   ]
 }
 
@@ -734,7 +740,7 @@ resource "aws_iam_role" "emr_cluster_service_role" {
   path = "/"
   force_detach_policies = [
     {
-      PolicyName = "AllowEMRInstnaceProfilePolicy-${local.stack_name}"
+      PolicyName = "EMRInstProfilePolicy-${local.stack_name}"
       PolicyDocument = {
         Version = "2012-10-17"
         Statement = [
@@ -750,7 +756,7 @@ resource "aws_iam_role" "emr_cluster_service_role" {
 }
 
 resource "aws_iam_role" "emr_clusterinstance_profile_role" {
-  name = "${local.stack_name}-EMRClusterinstanceProfileRole"
+  name = "EMRClustInstProfileRole-${local.stack_name}"
   assume_role_policy = {
     Statement = [
       {
@@ -760,8 +766,7 @@ resource "aws_iam_role" "emr_clusterinstance_profile_role" {
         Effect = "Allow"
         Principal = {
           Service = [
-            "ec2.amazonaws.com",
-            "lambda.amazonaws.com"
+            "ec2.amazonaws.com"
           ]
         }
       }
@@ -769,11 +774,22 @@ resource "aws_iam_role" "emr_clusterinstance_profile_role" {
     Version = "2012-10-17"
   }
   managed_policy_arns = [
-    "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonSageMakerFullAccess",
-    "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonS3ReadOnlyAccess",
-    "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonOpenSearchIngestionFullAccess",
-    "arn:${data.aws_partition.current.partition}:iam::aws:policy/AWSLambda_FullAccess",
-    "arn:${data.aws_partition.current.partition}:iam::aws:policy/SecretsManagerReadWrite"
+    "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonS3ReadOnlyAccess"
+  ]
+  force_detach_policies = [
+    {
+      PolicyName = "DataScienceRoleInherited"
+      PolicyDocument = {
+        Version = "2012-10-17"
+        Statement = [
+          {
+            Effect = "Allow"
+            Action = "iam:PassRole"
+            Resource = aws_iam_role.data_sciencewith_emr_sage_maker_execution_role.arn
+          }
+        ]
+      }
+    }
   ]
   path = "/"
 }
@@ -836,7 +852,7 @@ resource "aws_iam_role" "bucket_management_role" {
 resource "aws_lambda_function" "copy_zips_function" {
   description = "Downloads files from GitHub and uploads them to an S3 bucket"
   handler = "index.handler"
-  runtime = "python3.8"
+  runtime = "python3.10"
   // Unable to resolve Fn::GetAtt with value: "BucketManagementRole.Arn"
   timeout = 900
   code_signing_config_arn = {
@@ -928,7 +944,7 @@ def sendResponseCfn(event, context, responseStatus):
 "
   }
   handler = "index.lambda_handler"
-  runtime = "python3.9"
+  runtime = "python3.10"
   memory_size = 128
   timeout = 60
   role = aws_iam_role.bucket_management_role.arn

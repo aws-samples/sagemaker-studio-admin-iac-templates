@@ -53,7 +53,7 @@ Resources:
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
-        - Key: "for-use-with-amazon-sagemaker"
+        - Key: "for-use-with-amazon-emr-managed-policies"
           Value: "true"
         - Key: Name
           Value: !Sub '${AWS::StackName}-VPC'
@@ -100,7 +100,7 @@ Resources:
         - PrivateSubnet1
       MapPublicIpOnLaunch: false
       Tags:
-        - Key: "for-use-with-amazon-sagemaker"
+        - Key: "for-use-with-amazon-emr-managed-policies"
           Value: "true"
         - Key: Name
           Value: !Sub '${AWS::StackName} Private Subnet (AZ1)'

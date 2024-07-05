@@ -1,46 +1,17 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: This CloudFormation template creates a new SageMaker UserProfile with a specific IAM role for Data Scientist on an existing SageMaker Studio Domain.
+Description: This CloudFormation template creates a new SageMaker UserProfile with a IAM role for GenAI related use cases on an existing SageMaker Studio Domain.
 
 Parameters:
-  DataScienceUserProfileName:
+  SageMakerGenAIUserProfileName:
     Type: String
     Description: The name of the new UserProfile
-    Default: data-science
-
-  SageMakerStudioDomainId:
-    Type: String
-    Default: ''
-    Description: (Optional) The ID of the SageMaker Studio Domain. If not provided, the value will be imported from lab_0 stack
-
-  SageMakerStudioSecurityGroups:
-    Type: CommaDelimitedList
-    Default: ''
-    Description: (Optional) The list of Security Group IDs for the SageMaker Studio Domain. If not provided, the value will be imported from lab_0 stack
-
-  SageMakerStudioSubnetIds:
-    Type: CommaDelimitedList
-    Default: ''
-    Description: (Optional) The list of Subnet IDs for the SageMaker Studio Domain. If not provided, the value will be imported from lab_0 stack
-
-Conditions:
-  SageMakerStudioDomainIdProvidedCondition: !Not
-    - !Equals
-      - !Ref SageMakerStudioDomainId
-      - ''
-  SageMakerStudioSecurityGroupsCondition: !Not
-    - !Equals
-      - !Join ['', !Ref SageMakerStudioSecurityGroups]
-      - ''
-  SageMakerStudioSubnetIdsCondition: !Not
-    - !Equals
-      - !Join ['', !Ref SageMakerStudioSubnetIds]
-      - ''
+    Default: genai
 
 Resources:
-  DataScienceSageMakerExecutionRole:
+  GenAISageMakerExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "AmazonSageMakerExecutionRole-${DataScienceUserProfileName}-${AWS::Region}"
+      RoleName: !Sub "AmazonSageMakerExecutionRole-${SageMakerGenAIUserProfileName}-${AWS::Region}"
       Policies:
         - PolicyName: iam-pass-role
           PolicyDocument:
@@ -55,7 +26,7 @@ Resources:
                     - - 'arn:aws:iam::'
                       - !Ref 'AWS::AccountId'
                       - ':role/service-role/AmazonSageMakerExecutionRole-'
-                      - !Ref DataScienceUserProfileName
+                      - !Ref SageMakerGenAIUserProfileName
                       - '-'
                       - !Ref 'AWS::Region'
                   - !Join
@@ -63,7 +34,7 @@ Resources:
                     - - 'arn:aws:iam::'
                       - !Ref 'AWS::AccountId'
                       - ':role/AmazonSageMakerExecutionRole-'
-                      - !Ref DataScienceUserProfileName
+                      - !Ref SageMakerGenAIUserProfileName
                       - '-'
                       - !Ref 'AWS::Region'
                 Condition:
@@ -95,14 +66,8 @@ Resources:
                 Resource: arn:aws:sagemaker:*:*:*/*
                 Condition:
                   ForAllValues:StringEquals:
-                    "sagemaker:VpcSecurityGroupIds": !If
-                      - SageMakerStudioSecurityGroupsCondition
-                      - !Ref SageMakerStudioSecurityGroups
-                      - !ImportValue SageMakerCloudformationSecurityGroup
-                    "sagemaker:VpcSubnets": !If
-                      - SageMakerStudioSubnetIdsCondition
-                      - !Ref SageMakerStudioSubnetIds
-                      - !ImportValue SageMakerCloudformationSecurityGroup
+                    "sagemaker:VpcSecurityGroupIds": !ImportValue SageMakerCloudformationSecurityGroup
+                    "sagemaker:VpcSubnets": !ImportValue SageMakerCloudformationSecurityGroup
                   "Null":
                     "sagemaker:VpcSubnets": false
                     "sagemaker:VpcSecurityGroupIds": false
@@ -131,6 +96,53 @@ Resources:
                   - sagemaker:ListTrainingJobsForHyperParameterTuningJob
                   - sagemaker:ListFeatureGroups
                 Resource: "*"
+        - PolicyName: sagemaker-endpoint-deployment
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - 
+                Effect: Allow
+                Action:
+                  - sagemaker:CreateEndpointConfig
+                  - sagemaker:CreateEndpoint
+                  - sagemaker:DeleteEndpointConfig
+                  - sagemaker:DeleteEndpoint
+                  - sagemaker:UpdateEndpoint
+                  - sagemaker:UpdateEndpointWeightsAndCapacities
+                  - sagemaker:DescribeEndpoint
+                  - sagemaker:DescribeEndpointConfig
+                  - sagemaker:CreateInferenceComponent
+                  - sagemaker:DeleteInferenceComponent
+                  - sagemaker:DescribeInferenceComponent
+                  - sagemaker:UpdateInferenceComponent
+                  - sagemaker:UpdateInferenceComponentRuntimeConfig
+                Resource: arn:aws:sagemaker:*:*:*/*
+              - 
+                Effect: Allow
+                Action:
+                  - sagemaker:ListEndpoints
+                  - sagemaker:ListEndpointConfigs
+                  - sagemaker:ListInferenceComponents
+                Resource: "*"
+              -
+                Effect: Allow
+                Action:
+                  - sagemaker:ListTags
+                Resource: !Sub "arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:*/*"
+        - PolicyName: sagemaker-invoke-endpoint
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - sagemaker:InvokeEndpoint
+                Resource: !Sub "arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/*"
+              -
+                Effect: Allow
+                Action:
+                  - sagemaker:InvokeEndpoint
+                Resource: !Sub "arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:inference-component/*"
         - PolicyName: sagemaker-experiments-management
           PolicyDocument:
             Version: 2012-10-17
@@ -455,21 +467,25 @@ Resources:
                 - sagemaker.amazonaws.com
             Action:
               - sts:AssumeRole
+          - Effect: Allow
+            Principal:
+              Service:
+                - bedrock.amazonaws.com
+            Action:
+              - sts:AssumeRole
       ManagedPolicyArns:
-        - !Sub "arn:aws:iam::aws:policy/AmazonSageMakerFeatureStoreAccess"
+        - 'arn:aws:iam::aws:policy/AmazonSageMakerFeatureStoreAccess'
+        - 'arn:aws:iam::aws:policy/AmazonBedrockReadOnly'
 
-  DataScienceUserProfile:
+  SageMakerGenAIUserProfile:
     Type: AWS::SageMaker::UserProfile
     Properties:
-      DomainId: !If
-        - SageMakerStudioDomainIdProvidedCondition
-        - !Ref SageMakerStudioDomainId
-        - !ImportValue SageMakerDomainId
-      UserProfileName: !Ref DataScienceUserProfileName
+      DomainId: !ImportValue SageMakerDomainId
+      UserProfileName: !Ref SageMakerGenAIUserProfileName
       UserSettings:
-        ExecutionRole: !GetAtt DataScienceSageMakerExecutionRole.Arn
+        ExecutionRole: !GetAtt GenAISageMakerExecutionRole.Arn
 
 Outputs:
-  DataScienceUserProfileArn:
+  SageMakerGenAIUserProfileArn:
     Description: "The ARN of the new User Profile"
-    Value: !GetAtt DataScienceUserProfile.UserProfileArn
+    Value: !GetAtt SageMakerGenAIUserProfile.UserProfileArn
