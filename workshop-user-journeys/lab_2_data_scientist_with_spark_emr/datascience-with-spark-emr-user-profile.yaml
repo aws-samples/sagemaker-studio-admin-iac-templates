@@ -95,6 +95,7 @@ Resources:
                   - servicecatalog:SearchProducts
                   - servicecatalog:List* 
                   - servicecatalog:Describe*
+                  - cloudformation:GetTemplateSummary
                   - servicecatalog:ProvisionProduct
                   - servicecatalog:GetProvisionedProductOutputs
                   - sagemaker:ListTags 
