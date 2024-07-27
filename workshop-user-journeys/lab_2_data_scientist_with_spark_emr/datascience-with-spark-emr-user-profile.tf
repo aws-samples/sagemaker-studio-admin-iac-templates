@@ -3,7 +3,7 @@ provider "aws" {
 }
 
 variable "SageMakerDomainId" {
-  description = "TDomain ID of the Source SageMaker Studio Domain - run aws sagemaker describe-domain --domain-id..."
+  description = "Domain ID of the Source SageMaker Studio Domain - run aws sagemaker describe-domain --domain-id..."
 }
 
 variable "SageMakerCloudformationSubnetId" {
