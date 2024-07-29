@@ -1,0 +1,387 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'IAM Role and SageMaker User Profile for Cost Optimization Blog'
+
+Parameters:
+  CURRoleName:
+    Type: String
+    Description: The name of the new Cost & Usage Reports IAM Role
+    Default: SageMakerCostUsageReportsRole
+  UserProfileName:
+    Type: String
+    Description: The name of the new Cost & Usage Reports User Profile
+    Default: studio-cur-user-profile
+  SageMakerStudioSecurityGroups:
+    Type: CommaDelimitedList
+    Default: ''
+    Description: (Optional) The list of Security Group IDs for the SageMaker Studio Domain. If not provided, the value will be imported from lab_0 stack
+  SageMakerStudioSubnetIds:
+    Type: CommaDelimitedList
+    Default: ''
+    Description: (Optional) The list of Subnet IDs for the SageMaker Studio Domain. If not provided, the value will be imported from lab_0 stack
+
+Conditions:
+  SageMakerStudioSecurityGroupsCondition: !Not
+    - !Equals
+      - !Join ['', !Ref SageMakerStudioSecurityGroups]
+      - ''
+  SageMakerStudioSubnetIdsCondition: !Not
+    - !Equals
+      - !Join ['', !Ref SageMakerStudioSubnetIds]
+      - ''
+
+Resources:
+  SageMakerCostUsageReportsRole:
+    Type: 'AWS::IAM::Role'
+    Properties: 
+      RoleName: !Ref CURRoleName
+      AssumeRolePolicyDocument: 
+        Version: '2012-10-17'
+        Statement: 
+          - Effect: 'Allow'
+            Principal: 
+              Service: 
+                - 'sagemaker.amazonaws.com'
+                - 'athena.amazonaws.com'
+                - 'quicksight.amazonaws.com'
+                - 's3.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      Policies: 
+        - PolicyName: 'AthenaAccessPolicy'
+          PolicyDocument: 
+            Version: '2012-10-17'
+            Statement: 
+              - Effect: 'Allow'
+                Action: 
+                  - 'athena:StartQueryExecution'
+                  - 'athena:GetQueryResults'
+                  - 'athena:ListQueryExecutions'
+                  - 'athena:ListWorkGroups'
+                Resource: 
+                  - !Sub "arn:aws:athena:${AWS::Region}:${AWS::AccountId}:workgroup/*"
+                  - !Sub "arn:aws:athena:${AWS::Region}:${AWS::AccountId}:query/*"
+        - PolicyName: 'QuickSightAccessPolicy'
+          PolicyDocument: 
+            Version: '2012-10-17'
+            Statement: 
+              - Effect: 'Allow'
+                Action: 
+                  - 'quicksight:Describe*'
+                  - 'quicksight:List*'
+                  - 'quicksight:ListUsers'
+                Resource: 
+                  - !Sub "arn:aws:quicksight:${AWS::Region}:${AWS::AccountId}:user/${AWS::AccountId}/*"
+                  - !Sub "arn:aws:quicksight:${AWS::Region}:${AWS::AccountId}:dataset/*"
+                  - !Sub "arn:aws:quicksight:${AWS::Region}:${AWS::AccountId}:analysis/*"
+                  - !Sub "arn:aws:quicksight:${AWS::Region}:${AWS::AccountId}:dashboard/*"
+                  - !Sub "arn:aws:quicksight:${AWS::Region}:${AWS::AccountId}:namespace/default"
+        - PolicyName: 'CURAccessPolicy'
+          PolicyDocument: 
+            Version: '2012-10-17'
+            Statement: 
+              - Effect: 'Allow'
+                Action: 
+                  - 'cur:DescribeReportDefinitions'
+                  - 'cur:GetReportData'
+                  - 'cur:PutReportDefinition'
+                  - 'cur:DeleteReportDefinition'
+                Resource: 
+                  - !Sub "arn:aws:cur:${AWS::Region}:${AWS::AccountId}:report/*"
+                  - !Sub "arn:aws:cur:${AWS::Region}:${AWS::AccountId}:definition/*"
+        - PolicyName: 'S3AccessPolicy'
+          PolicyDocument: 
+            Version: '2012-10-17'
+            Statement: 
+              - Effect: 'Allow'
+                Action: 
+                  - 's3:CreateBucket'
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                  - 's3:ListBuckets'
+                  - 's3:GetBucketLocation'
+                  - 's3:PutObject'
+                  - 's3:DeleteObject'
+                Resource: arn:aws:s3:::*
+        - PolicyName: 'CostExplorerAccessPolicy'
+          PolicyDocument: 
+            Version: '2012-10-17'
+            Statement: 
+              - Effect: 'Allow'
+                Action: 
+                  - 'ce:GetCostAndUsage'
+                  - 'ce:GetCostForecast'
+                  - 'ce:GetReservationUtilization'
+                  - 'ce:GetSavingsPlansUtilization'
+                  - 'ce:DescribeCostCategoryDefinition'
+                Resource: 
+                  - "*"
+        - PolicyName: 'BudgetsAccessPolicy'
+          PolicyDocument: 
+            Version: '2012-10-17'
+            Statement: 
+              - Effect: 'Allow'
+                Action: 
+                  - 'budgets:ViewBudget'
+                  - 'budgets:ModifyBudget'
+                Resource: 
+                  - !Sub "arn:aws:budgets::${AWS::AccountId}:budget/*"
+        - PolicyName: 'SageMakerCanvasDenyPolicy'
+          PolicyDocument: 
+            Version: '2012-10-17'
+            Statement: 
+              - Effect: 'Deny'
+                Action: 
+                  - 'sagemaker:CreateCanvasApp'
+                  - 'sagemaker:DeleteCanvasApp'
+                  - 'sagemaker:ListCanvasApp'
+                  - 'sagemaker:DescribeCanvasApp'
+                  - 'sagemaker:InvokeCanvasApp'
+                  - 'sagemaker:StartCanvasApp'
+                  - 'sagemaker:StopCanvasApp'
+                Resource: 
+                  - !Sub "arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:canvas-app/*"
+        - PolicyName: 'iam-pass-role'
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource:
+                  - !Join
+                    - ''
+                    - - 'arn:aws:iam::'
+                      - !Ref 'AWS::AccountId'
+                      - ':role/service-role/AmazonSageMakerExecutionRole-'
+                      - !Ref UserProfileName
+                      - '-'
+                      - !Ref 'AWS::Region'
+                  - !Join
+                    - ''
+                    - - 'arn:aws:iam::'
+                      - !Ref 'AWS::AccountId'
+                      - ':role/AmazonSageMakerExecutionRole-'
+                      - !Ref UserProfileName
+                      - '-'
+                      - !Ref 'AWS::Region'
+                Condition:
+                  StringEquals:
+                    "iam:PassedToService": "sagemaker.amazonaws.com"
+        - PolicyName: 'IAMRoleAccessPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:GetRole
+                Resource:
+                  - !Sub "arn:aws:iam::${AWS::AccountId}:role/${CURRoleName}"
+        - PolicyName: 'sagemaker-studio-app-permissions'
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sagemaker:CreateApp
+                  - sagemaker:DeleteApp
+                  - sagemaker:ListTrainingJobs
+                  - sagemaker:ListEndpoints
+                  - sagemaker:DescribeApp
+                  - sagemaker:ListApps
+                  - sagemaker:ListDomains
+                  - sagemaker:ListUserProfiles
+                  - sagemaker:ListSpaces
+                  - sagemaker:DescribeApp
+                  - sagemaker:DescribeDomain
+                  - sagemaker:DescribeUserProfile
+                  - sagemaker:DescribeSpace
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - sagemaker:CreatePresignedDomainUrl
+                Resource:
+                  !Join
+                  - ''
+                  - - 'arn:aws:sagemaker:'
+                    - !Ref 'AWS::Region'
+                    - ':'
+                    - !Ref 'AWS::AccountId'
+                    - ':user-profile/${sagemaker:DomainId}/${sagemaker:UserProfileName}'
+              - Effect: Allow
+                Action:
+                  - sagemaker:AddTags
+                Resource: !Sub "arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:*/*"
+                Condition:
+                  "Null":
+                    "sagemaker:TaggingAction": "false"
+              - Effect: Allow
+                Action:
+                  - sagemaker:CreateSpace
+                  - sagemaker:UpdateSpace
+                  - sagemaker:DeleteSpace
+                Resource:
+                  !Join
+                  - ''
+                  - - 'arn:aws:sagemaker:'
+                    - !Ref 'AWS::Region'
+                    - ':'
+                    - !Ref 'AWS::AccountId'
+                    - ':space/${sagemaker:DomainId}/*'
+                Condition:
+                  "Null":
+                    "sagemaker:OwnerUserProfileArn": "true"
+              - Effect: Allow
+                Action:
+                  - sagemaker:CreateSpace
+                  - sagemaker:UpdateSpace
+                  - sagemaker:DeleteSpace
+                Resource:
+                  !Join
+                  - ''
+                  - - 'arn:aws:sagemaker:'
+                    - !Ref 'AWS::Region'
+                    - ':'
+                    - !Ref 'AWS::AccountId'
+                    - ':space/${sagemaker:DomainId}/*'
+                Condition:
+                  ArnLike:
+                    "sagemaker:OwnerUserProfileArn":
+                      !Join
+                      - ''
+                      - - 'arn:aws:sagemaker:'
+                        - !Ref 'AWS::Region'
+                        - ':'
+                        - !Ref 'AWS::AccountId'
+                        - ':user-profile/${sagemaker:DomainId}/${sagemaker:UserProfileName}'
+                  StringEquals:
+                    "sagemaker:SpaceSharingType":
+                      - "Private"
+                      - "Shared"
+              - Effect: Allow
+                Action:
+                  - sagemaker:CreateApp
+                  - sagemaker:DeleteApp
+                Resource:
+                  !Join
+                  - ''
+                  - - 'arn:aws:sagemaker:'
+                    - !Ref 'AWS::Region'
+                    - ':'
+                    - !Ref 'AWS::AccountId'
+                    - ':app/${sagemaker:DomainId}/*'
+                Condition:
+                  ArnLike:
+                    "sagemaker:OwnerUserProfileArn":
+                      !Join
+                      - ''
+                      - - 'arn:aws:sagemaker:'
+                        - !Ref 'AWS::Region'
+                        - ':'
+                        - !Ref 'AWS::AccountId'
+                        - ':user-profile/${sagemaker:DomainId}/${sagemaker:UserProfileName}'
+                  StringEquals:
+                    "sagemaker:SpaceSharingType":
+                      - "Private"
+              - Effect: Deny
+                Sid: DenySageMakerCanvasCreateApp
+                Action:
+                  - sagemaker:CreateApp
+                Resource:
+                  !Join
+                  - ''
+                  - - 'arn:aws:sagemaker:'
+                    - !Ref 'AWS::Region'
+                    - ':'
+                    - !Ref 'AWS::AccountId'
+                    - ':app/${sagemaker:DomainId}/${sagemaker:UserProfileName}/canvas/*'
+              - Effect: Allow
+                Action:
+                  - sagemaker:CreateApp
+                  - sagemaker:DeleteApp
+                Resource: "arn:aws:sagemaker:*:*:app/${sagemaker:DomainId}/*/*/*"
+                Condition:
+                  StringEquals:
+                    "sagemaker:SpaceSharingType":
+                      - "Shared"
+        - PolicyName: 'allow-aws-service-actions'
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:DeleteAlarms
+                  - cloudwatch:DescribeAlarms
+                  - cloudwatch:GetMetricData
+                  - cloudwatch:GetMetricStatistics
+                  - cloudwatch:ListMetrics
+                  - cloudwatch:PutMetricAlarm
+                  - cloudwatch:PutMetricData
+                  - ec2:CreateNetworkInterface
+                  - ec2:CreateNetworkInterfacePermission
+                  - ec2:CreateVpcEndpoint
+                  - ec2:DeleteNetworkInterface
+                  - ec2:DeleteNetworkInterfacePermission
+                  - ec2:DescribeDhcpOptions
+                  - ec2:DescribeNetworkInterfaces
+                  - ec2:DescribeRouteTables
+                  - ec2:DescribeSecurityGroups
+                  - ec2:DescribeSubnets
+                  - ec2:DescribeVpcEndpoints
+                  - ec2:DescribeVpcs
+                  - logs:CreateLogDelivery
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:DeleteLogDelivery
+                  - logs:Describe*
+                  - logs:GetLogDelivery
+                  - logs:GetLogEvents
+                  - logs:ListLogDeliveries
+                  - logs:PutLogEvents
+                  - logs:PutResourcePolicy
+                  - logs:UpdateLogDelivery
+                Resource: "*"
+        - PolicyName: 'glue-management-actions'
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - glue:GetTable
+                  - glue:UpdateTable
+                  - glue:GetDatabase
+                  - glue:CreateDatabase
+                  - glue:CreateTable
+                Resource: 
+                  - "arn:aws:glue:*:*:catalog"
+                  - "arn:aws:glue:*:*:database/*"
+                  - "arn:aws:glue:*:*:table/*/*"
+        - PolicyName: 'kms-management-actions'
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kms:CreateGrant
+                  - kms:Decrypt
+                  - kms:DescribeKey
+                  - kms:Encrypt
+                  - kms:GenerateDataKey*
+                  - kms:ReEncrypt*
+                  - kms:ListKeys
+                  - kms:DescribeKey
+                Resource: !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*"
+
+  SageMakerUserProfile:
+    Type: 'AWS::SageMaker::UserProfile'
+    Properties:
+      DomainId: !ImportValue SageMakerDomainId
+      UserProfileName: !Ref UserProfileName
+      UserSettings:
+        ExecutionRole: !GetAtt SageMakerCostUsageReportsRole.Arn
+
+Outputs:
+  SageMakerCostUsageReportsRoleARN:
+    Description: 'ARN of the IAM role for SageMaker cost usage reports'
+    Value: !GetAtt SageMakerCostUsageReportsRole.Arn
+  SageMakerUserProfileName:
+    Description: 'Name of the SageMaker User Profile for cost optimization'
+    Value: !Ref SageMakerUserProfile
